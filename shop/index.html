@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MrSqoopExpress — Express Tech Shop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Announcement bar -->
+  <div class="announcement">
+    <div class="marquee">
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+      <span>express shipping within 15 business days</span>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <nav class="nav-left">
+      <a href="#best-seller" class="active">Shop Now</a>
+    </nav>
+    <div class="logo">
+      <span class="logo-title">MrSqoopExpress</span>
+      <span class="logo-sub">EXPRESS TECH SHOP</span>
+    </div>
+    <div class="nav-right">
+      <button class="icon-btn" aria-label="Search">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+      </button>
+      <button class="icon-btn cart-btn" id="cartBtn" aria-label="Open cart">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 7h12l-1 13H7L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>
+        <span class="cart-count" id="cartCount" hidden>0</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Best Seller -->
+  <section class="section section-space">
+    <div class="space-inner">
+      <h2 class="section-title">BEST SELLER</h2>
+      <div class="product-grid">
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/mic-lavalier-ghost.png" alt="Wireless Lavalier Microphone Set" />
+          </div>
+          <h3 class="product-name">Wireless Lavalier Microphone Set</h3>
+          <p class="product-price"><span class="old-price">UGX 150,000</span> <span class="new-price">UGX 95,000</span></p>
+        </article>
+
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/massage-gun-ghost.png" alt="Deep Tissue Massage Gun" />
+          </div>
+          <h3 class="product-name">Deep Tissue Massage Gun</h3>
+          <p class="product-price"><span class="old-price">UGX 340,000</span> <span class="new-price">UGX 190,000</span></p>
+        </article>
+
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/wifi-router-ghost.png" alt="EDUP Wi-Fi Router" />
+          </div>
+          <h3 class="product-name">EDUP Wi-Fi Router &amp; Extender</h3>
+          <p class="product-price"><span class="old-price">UGX 230,000</span> <span class="new-price">UGX 150,000</span></p>
+        </article>
+
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/pest-repeller-ghost.png" alt="Ultrasonic Pest Repeller" />
+          </div>
+          <h3 class="product-name">Ultrasonic Pest Repeller</h3>
+          <p class="product-price"><span class="old-price">UGX 115,000</span> <span class="new-price">UGX 65,000</span></p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- Featured Product -->
+  <section class="section section-space">
+    <div class="space-inner">
+      <h2 class="section-title">FEATURED PRODUCT</h2>
+      <div class="product-grid">
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/bee-venom-southmoon-ghost.png" alt="South Moon Bee Venom Cream" />
+          </div>
+          <h3 class="product-name">South Moon Bee Venom Cream (60g)</h3>
+          <p class="product-price"><span class="old-price">UGX 135,000</span> <span class="new-price">UGX 75,000</span></p>
+        </article>
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/bee-venom-wiyun-ghost.png" alt="Wiyun Bee Venom & Turmeric Cream" />
+          </div>
+          <h3 class="product-name">Wiyun Bee Venom &amp; Turmeric Cream (60g)</h3>
+          <p class="product-price"><span class="old-price">UGX 135,000</span> <span class="new-price">UGX 75,000</span></p>
+        </article>
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/formula-ghost.png" alt="Formula Tongue Cleaner" />
+          </div>
+          <h3 class="product-name">Formula Tongue Cleaner</h3>
+          <p class="product-price"><span class="old-price">UGX 25,000</span> <span class="new-price">UGX 15,000</span></p>
+        </article>
+        <article class="product-card">
+          <div class="product-img">
+            <span class="sale-tag">Sale</span>
+            <img src="images/mic-handheld-ghost.png" alt="Wireless Handheld Interview Microphone" />
+          </div>
+          <h3 class="product-name">Wireless Handheld Interview Microphone</h3>
+          <p class="product-price"><span class="old-price">UGX 180,000</span> <span class="new-price">UGX 120,000</span></p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="logo footer-logo">
+      <span class="logo-title">MrSqoopExpress</span>
+      <span class="logo-sub">EXPRESS TECH SHOP</span>
+    </div>
+    <p>&copy; 2026 MrSqoopExpress. All rights reserved.</p>
+  </footer>
+
+  <!-- Cart drawer -->
+  <div class="cart-overlay" id="cartOverlay" hidden></div>
+  <aside class="cart-drawer" id="cartDrawer" aria-hidden="true" aria-label="Shopping cart">
+    <div class="cart-head">
+      <h2>Your Cart</h2>
+      <button class="cart-close" id="cartClose" aria-label="Close cart">&times;</button>
+    </div>
+    <div class="cart-items" id="cartItems"></div>
+    <p class="cart-empty" id="cartEmpty">Your cart is empty.</p>
+    <div class="cart-foot">
+      <div class="cart-total-row">
+        <span>Total</span>
+        <span id="cartTotal">UGX 0</span>
+      </div>
+      <button class="btn-dark cart-checkout" id="cartCheckout">Checkout</button>
+    </div>
+  </aside>
+
+  <!-- Product quick-view modal -->
+  <div class="qv-overlay" id="qvOverlay" hidden></div>
+  <div class="qv-modal" id="qvModal" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Product details">
+    <button class="qv-close" id="qvClose" aria-label="Close details">&times;</button>
+    <div class="qv-media"><img id="qvImg" src="" alt="" /></div>
+    <div class="qv-info">
+      <span class="qv-badge">Sale</span>
+      <h2 class="qv-name" id="qvName"></h2>
+      <p class="qv-price"><span class="old-price" id="qvOld"></span> <span class="new-price" id="qvNew"></span></p>
+      <p class="qv-desc" id="qvDesc"></p>
+      <div class="qv-qty" aria-label="Quantity">
+        <button type="button" id="qvMinus" aria-label="Decrease">&minus;</button>
+        <span id="qvQty">1</span>
+        <button type="button" id="qvPlus" aria-label="Increase">+</button>
+      </div>
+      <button class="btn-dark qv-add" id="qvAdd">Add to Cart</button>
+    </div>
+  </div>
+
+  <script src="script.js" defer></script>
+</body>
+</html>

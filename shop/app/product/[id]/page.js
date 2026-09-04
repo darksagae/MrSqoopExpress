@@ -18,6 +18,7 @@ export default function ProductDetail() {
   const [mainImg, setMainImg] = useState(null);
   const [variant, setVariant] = useState(null);
   const [qty, setQty] = useState(1);
+  const [shipLoading, setShipLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +39,28 @@ export default function ProductDetail() {
     return () => { cancelled = true; };
   }, [id]);
 
+  // Re-quote shipping when the shopper switches variant. AliExpress prices
+  // freight per SKU, so a heavier or bulkier option can ship at a different
+  // rate — showing the first variant's quote for all of them would be wrong.
+  useEffect(() => {
+    const skuId = variant?.skuId;
+    if (!product || !skuId || skuId === product.shipping?.quotedForSkuId) return;
+
+    let cancelled = false;
+    setShipLoading(true);
+    fetch(`/api/products/${id}?skuId=${encodeURIComponent(skuId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.product?.shipping) return;
+        // Only the shipping block is replaced; everything else is unchanged and
+        // swapping the whole product would flicker the gallery and selection.
+        setProduct((prev) => (prev ? { ...prev, shipping: d.product.shipping } : prev));
+      })
+      .catch(() => { /* keep the previous quote rather than blanking the price */ })
+      .finally(() => !cancelled && setShipLoading(false));
+    return () => { cancelled = true; };
+  }, [id, variant?.skuId, product?.shipping?.quotedForSkuId, product]);
+
   if (loading) return <div className="pd-status">Loading product…</div>;
 
   if (error) {
@@ -53,12 +76,16 @@ export default function ProductDetail() {
   const price = variant?.priceUGX ?? product.priceUGX;
   const showRange = !variant && product.maxPriceUGX > product.priceUGX;
 
-  // Delivery timing (cost, if any, is already folded into the price above).
-  const delivery = product.delivery || null;
-  const deliveryText = delivery
-    ? delivery.desc ||
-      (delivery.minDays && delivery.maxDays ? `${delivery.minDays}–${delivery.maxDays} days` : null)
-    : null;
+  // The supplier's shipping charge, quoted per product and never folded into
+  // the price because it genuinely differs per product. Customers see it as
+  // shipping to Uganda; the Deira leg it was actually priced for is internal.
+  const ship = product.shipping || null;
+  const shipUGX = ship?.known ? ship.costUGX : null;
+  // Carried into the cart so checkout can total it. Not shown here — the
+  // storefront quotes product cost and shipping only.
+  const handlingUGX = variant?.handlingUGX ?? product.handlingUGX ?? 0;
+  const deliveryText =
+    ship?.desc || (ship?.minDays && ship?.maxDays ? `${ship.minDays}–${ship.maxDays} days` : null);
 
   const addToCart = () => {
     add(
@@ -67,6 +94,9 @@ export default function ProductDetail() {
         name: variant && variant.label !== 'Default' ? `${product.title} (${variant.label})` : product.title,
         price,
         img: variant?.image || mainImg,
+        skuId: variant?.skuId ?? ship?.quotedForSkuId ?? null,
+        shipUGX,
+        handlingUGX,
       },
       qty
     );
@@ -132,9 +162,23 @@ export default function ProductDetail() {
             </div>
           )}
 
-          <div className="pd-ship free">
-            ✓ Free delivery to Uganda
-            {deliveryText ? ` · arrives in ${deliveryText}` : ''}
+
+          <div
+            className={`pd-ship ${
+              ship?.deliverable === false ? 'none' : ship?.free ? 'free' : ship?.known ? '' : 'unknown'
+            }`}
+          >
+            {shipLoading
+              ? 'Checking shipping…'
+              : ship?.deliverable === false
+              ? 'Not available for delivery to'
+              : !ship?.known
+              ? 'Shipping calculated at checkout'
+              : ship.free
+                ? '✓ Free shipping'
+                : `Shipping ${fmt(ship.costUGX)}`}
+            {!shipLoading && ship?.destination ? ` to ${ship.destination}` : ''}
+            {!shipLoading && deliveryText ? ` · arrives in ${deliveryText}` : ''}
           </div>
 
           <div className="pd-buy">
@@ -143,8 +187,13 @@ export default function ProductDetail() {
               <span>{qty}</span>
               <button type="button" onClick={() => setQty((q) => q + 1)}>+</button>
             </div>
-            <button className="btn-dark pd-add" onClick={addToCart}>
-              Add to Cart
+            <button
+              className="btn-dark pd-add"
+              // Same reasoning as the catalogue: never sell what cannot be shipped.
+              disabled={shipLoading || ship?.deliverable === false}
+              onClick={addToCart}
+            >
+              {ship?.deliverable === false ? 'Not available for this destination' : 'Add to Cart'}
             </button>
           </div>
 

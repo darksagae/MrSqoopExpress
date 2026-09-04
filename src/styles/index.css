@@ -126,3 +126,70 @@ body,
     transform: translate(20px, -30px) scale(0.95);
   }
 }
+
+/* Partner stores marquee */
+.partners-marquee {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 70;
+  overflow: hidden;
+  white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0a0a0a;
+}
+
+.partners-marquee-track {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 0;
+  animation: partners-scroll 32s linear infinite;
+  will-change: transform;
+}
+
+.partners-marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.88);
+  padding-left: 36px;
+}
+
+.partners-marquee-logo {
+  display: block;
+  height: 18px;
+  width: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.partners-marquee-name {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.partners-marquee-sep {
+  margin-left: 26px;
+  color: #e8b923;
+  font-size: 14px;
+  line-height: 1;
+}
+
+@keyframes partners-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partners-marquee-track {
+    animation: none;
+  }
+}

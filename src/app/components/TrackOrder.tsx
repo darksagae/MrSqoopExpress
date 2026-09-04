@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react'
 import { RotatingTextRing } from './RotatingTextRing'
 import { LogoHeader } from './LogoHeader'
+import { PartnersMarquee } from './PartnersMarquee'
 import { BusinessAddress } from './BusinessAddress'
 import { TrackingTimeline } from './TrackingTimeline'
 import { buildOrderDetails, buildTimeline } from '../lib/ordersStore'
@@ -135,9 +136,10 @@ export function TrackOrder() {
 
   return (
     <>
+      <PartnersMarquee />
       <LogoHeader />
 
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-6 pt-24 md:pt-28">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-6 pt-32 md:pt-36">
         <div className="flex flex-1 flex-col">
           <header className="text-center">
             <h1 className="text-lg font-bold text-white">Track Package</h1>

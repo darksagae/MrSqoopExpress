@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../cart';
+import { CUSTOMER_DESTINATION_LABEL } from '@/lib/shipping-destination';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 
@@ -17,7 +18,8 @@ function guessNetwork(phone) {
 }
 
 export default function CheckoutPage() {
-  const { items, total, clear } = useCart();
+  const { items, subtotal, shipping, shippingKnown, handling, total, clear } = useCart();
+
   const router = useRouter();
 
   const [name, setName] = useState('');
@@ -82,6 +84,12 @@ export default function CheckoutPage() {
     setError(null);
     if (!name.trim() || !phone.trim()) return setError('Please enter your name and phone number.');
     if (!network) return setError('Please choose MTN Mobile Money or Airtel Money.');
+    // Charging a total that omits an unquoted shipping leg would undercharge the
+    // customer now and leave the cost unrecoverable after the money has moved.
+    if (!shippingKnown)
+      return setError(
+        'Shipping for one of your items could not be priced. Please remove it and try again.'
+      );
 
     setSubmitting(true);
     try {
@@ -137,7 +145,7 @@ export default function CheckoutPage() {
         {paid && (
           <>
             <p>Your payment is confirmed and your order is being prepared.</p>
-            <p className="co-muted">You’ll receive your items via free delivery to Uganda.</p>
+            <p className="co-muted">Delivering to {CUSTOMER_DESTINATION_LABEL}.</p>
           </>
         )}
 
@@ -250,14 +258,35 @@ export default function CheckoutPage() {
                 <img src={c.img} alt="" />
                 <div className="co-item-info">
                   <div className="co-item-name">{c.name}</div>
-                  <div className="co-item-meta">Qty {c.qty} · {fmt(c.price)}</div>
+                  <div className="co-item-meta">
+                    Qty {c.qty} · {fmt(c.price)}
+                    {c.shipUGX == null
+                      ? ' · shipping TBC'
+                      : c.shipUGX === 0
+                        ? ' · free shipping'
+                        : ` · +${fmt(c.shipUGX)} shipping`}
+                  </div>
                 </div>
                 <div className="co-item-line">{fmt(c.price * c.qty)}</div>
               </div>
             ))}
           </div>
-          <div className="co-summary-row"><span>Subtotal</span><span>{fmt(total)}</span></div>
-          <div className="co-summary-row"><span>Delivery to Uganda</span><span>Free</span></div>
+          <div className="co-summary-row"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
+          {/* AliExpress prices shipping per product, so this is the sum of the
+              individual quotes rather than one flat delivery fee. */}
+          <div className="co-summary-row">
+            <span>Shipping to {CUSTOMER_DESTINATION_LABEL}</span>
+            <span>
+              {!shippingKnown ? 'Calculated at checkout' : shipping === 0 ? `Free — ${fmt(0)}` : fmt(shipping)}
+            </span>
+          </div>
+          {/* The rate itself is not disclosed — only the amount it comes to. */}
+          {handling > 0 && (
+            <div className="co-summary-row">
+              <span>MrSqoopExpress handling</span>
+              <span>{fmt(handling)}</span>
+            </div>
+          )}
           <div className="co-summary-row total"><span>Total</span><span>{fmt(total)}</span></div>
         </aside>
       </div>

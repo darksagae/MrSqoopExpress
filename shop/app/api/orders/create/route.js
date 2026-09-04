@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { WAREHOUSE } from '@/lib/shipping-destination';
 
 // This would connect to your database
 // Using in-memory storage for now (replace with DB)
@@ -34,15 +35,16 @@ export async function POST(request) {
       customerName,
       customerEmail,
       customerPhone,
+      // The supplier ships to the Deira receiving house, not to the customer:
+      // that is the address every freight quote was priced against, and the
+      // goods are forwarded on to Uganda from there.
       deliveryAddress: {
-        // Override with warehouse address
-        name: 'MrSqoopExpress Warehouse',
-        address: 'Plot 100, Industrial Area',
-        city: 'Kampala',
-        region: 'Central',
-        country: 'Uganda',
-        postalCode: '256',
-        phone: '+256-XXX-XXX-XXX', // Your warehouse phone
+        name: 'MrSqoopExpress',
+        address: WAREHOUSE.addressLine,
+        city: WAREHOUSE.city,
+        region: WAREHOUSE.province,
+        country: WAREHOUSE.country,
+        countryCode: WAREHOUSE.countryCode,
       },
       items,
       totalAmountUGX,

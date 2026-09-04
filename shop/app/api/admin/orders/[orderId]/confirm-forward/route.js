@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { WAREHOUSE_LABEL } from '@/lib/shipping-destination';
 
 export async function POST(request, { params }) {
   const orderId = params.orderId;
@@ -80,7 +81,7 @@ async function updateOrderInDatabase(orderId, updates) {
 async function forwardToAliExpress(order) {
   console.log('📦 Calling AliExpress API to create order');
   console.log('Items:', order.items);
-  console.log('Warehouse Address: Your Uganda warehouse');
+  console.log('Supplier ships to:', WAREHOUSE_LABEL);
 
   // TODO: Call actual AliExpress API
   const mockOrderId = `AE-${Date.now()}`;

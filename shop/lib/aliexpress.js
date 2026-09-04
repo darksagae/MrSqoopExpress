@@ -1,4 +1,15 @@
 import crypto from 'crypto';
+import {
+  readTokens,
+  writeTokens,
+  claimRefresh,
+  recordRefreshFailure,
+  needsRefresh,
+} from './ali-tokens.js';
+// Catalogue and freight queries are quoted against the customer's country —
+// that is what the shopper is shown and charged. Where the goods are actually
+// routed is a separate, internal matter.
+import { CUSTOMER_DESTINATION } from './shipping-destination.js';
 
 /**
  * AliExpress Dropshipping (DS) API client
@@ -14,11 +25,7 @@ import crypto from 'crypto';
 
 const GATEWAY = process.env.ALIEXPRESS_API_ENDPOINT || 'https://api-sg.aliexpress.com/sync';
 
-// Module-level token cache. Seeded from env, updated in-memory when we refresh.
-// (On Vercel this persists within a warm instance; a durable KV store is the
-//  next step for surviving cold starts + refresh-token rotation.)
-let cachedAccessToken = process.env.ALIEXPRESS_ACCESS_TOKEN || null;
-let cachedRefreshToken = process.env.ALIEXPRESS_REFRESH_TOKEN || null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class AliExpressDS {
   constructor() {
@@ -26,13 +33,14 @@ export class AliExpressDS {
     this.appSecret = process.env.ALIEXPRESS_APP_SECRET;
   }
 
-  get accessToken() {
-    return cachedAccessToken;
-  }
-
-  /** True only when we have everything needed to make a real DS call. */
-  isConfigured() {
-    return Boolean(this.appKey && this.appSecret && this.accessToken);
+  /**
+   * Whether the app credentials are present. Deliberately *not* "do we hold a
+   * usable token" — that is a database question, so it cannot be answered
+   * synchronously, and a sync method that returned a Promise would read as
+   * truthy even when the answer was no.
+   */
+  hasCredentials() {
+    return Boolean(this.appKey && this.appSecret);
   }
 
   /** Explains what's missing, for clear error messages. */
@@ -40,8 +48,110 @@ export class AliExpressDS {
     const missing = [];
     if (!this.appKey) missing.push('NEXT_PUBLIC_ALIEXPRESS_APP_KEY');
     if (!this.appSecret) missing.push('ALIEXPRESS_APP_SECRET');
-    if (!this.accessToken) missing.push('ALIEXPRESS_ACCESS_TOKEN (OAuth token — obtained after production approval)');
     return missing;
+  }
+
+  /**
+   * A valid access token, renewed ahead of expiry rather than after a failure.
+   *
+   * The store is the source of truth, not the environment. ALIEXPRESS_ACCESS_TOKEN
+   * is consulted once, to seed an empty table on first deploy; after that every
+   * instance reads and writes the same row. That is the whole point — AliExpress
+   * burns the old refresh token each time it issues a new pair, so a refresh held
+   * only in one instance's memory silently invalidates every other instance.
+   */
+  async getAccessToken({ force = false } = {}) {
+    let row = await readTokens({ fresh: force });
+    if (!row) row = await this.seedFromEnv();
+
+    if (!row) {
+      const err = new Error(
+        'AliExpress is not authorized yet — visit /api/auth/aliexpress to connect the account.'
+      );
+      err.code = 'NOT_AUTHORIZED';
+      throw err;
+    }
+
+    if (force || needsRefresh(row)) row = await this.refreshTokens(row);
+
+    if (!row?.access_token) {
+      const err = new Error('AliExpress token store holds no usable access token.');
+      err.code = 'NOT_AUTHORIZED';
+      throw err;
+    }
+    return row.access_token;
+  }
+
+  /** One-time migration of env-var tokens into the store. */
+  async seedFromEnv() {
+    const accessToken = process.env.ALIEXPRESS_ACCESS_TOKEN || '';
+    const refreshToken = process.env.ALIEXPRESS_REFRESH_TOKEN || null;
+    if (!accessToken && !refreshToken) return null;
+
+    console.log('[aliexpress] seeding token store from environment (one-time)');
+    // Expiry is unknown for an env-seeded token, so it is left null: renew on
+    // rejection rather than on a guessed schedule.
+    return writeTokens({ accessToken, refreshToken, accessExpiresAt: null, refreshExpiresAt: null });
+  }
+
+  /**
+   * Renew the pair, single-flight across instances.
+   *
+   * Two concurrent refreshes would each rotate the other's refresh token out and
+   * break the chain permanently, so whoever wins the lease makes the call and
+   * everyone else waits and re-reads the result.
+   */
+  async refreshTokens(current) {
+    const claimed = await claimRefresh();
+    if (!claimed) {
+      await sleep(2000);
+      const row = await readTokens({ fresh: true });
+      return row?.access_token ? row : current;
+    }
+
+    const refreshToken = claimed.refresh_token || current?.refresh_token;
+    if (!refreshToken) {
+      await recordRefreshFailure('no refresh token stored');
+      const err = new Error(
+        'AliExpress refresh token is missing — re-authorize at /api/auth/aliexpress.'
+      );
+      err.code = 'NOT_AUTHORIZED';
+      throw err;
+    }
+
+    let resp;
+    try {
+      resp = await this.restCall('/auth/token/refresh', { refresh_token: refreshToken });
+    } catch (e) {
+      await recordRefreshFailure(e.message);
+      throw e;
+    }
+
+    const parsed = parseTokenResponse(resp);
+    if (!parsed.accessToken) {
+      const detail =
+        resp?.error_description || resp?.error_msg || resp?.error || JSON.stringify(resp).slice(0, 300);
+      await recordRefreshFailure(detail);
+      const err = new Error(`AliExpress token refresh failed: ${detail}`);
+      err.code = 'REFRESH_FAILED';
+      throw err;
+    }
+
+    // Stored before the new token is handed out. A crash in between would
+    // otherwise strand the rotated refresh token and take the shop offline
+    // until a human re-authorized.
+    return writeTokens(parsed);
+  }
+
+  /** Renew now regardless of remaining lifetime. Used by the keep-alive cron. */
+  async forceRefresh() {
+    const row = (await readTokens({ fresh: true })) || (await this.seedFromEnv());
+    if (!row) {
+      const err = new Error('Nothing to refresh — AliExpress has never been authorized.');
+      err.code = 'NOT_AUTHORIZED';
+      throw err;
+    }
+    return this.refreshTokens(row);
   }
 
   /** Sign a parameter set per AliExpress rules. */
@@ -59,7 +169,7 @@ export class AliExpressDS {
 
   /** Low-level call to any DS method. Returns parsed JSON or throws. */
   async call(method, businessParams = {}, _retried = false) {
-    if (!this.isConfigured()) {
+    if (!this.hasCredentials()) {
       const err = new Error(
         `AliExpress DS API not configured. Missing: ${this.missingConfig().join(', ')}`
       );
@@ -67,10 +177,14 @@ export class AliExpressDS {
       throw err;
     }
 
+    // On the retry pass, force a renewal — the token we just used was rejected,
+    // so re-reading the same cached value would fail identically.
+    const accessToken = await this.getAccessToken({ force: _retried });
+
     const params = {
       app_key: this.appKey,
       method,
-      access_token: this.accessToken,
+      access_token: accessToken,
       timestamp: Date.now().toString(), // ms since epoch
       sign_method: 'sha256',
       format: 'json',
@@ -102,10 +216,10 @@ export class AliExpressDS {
       const msg = `${e.msg || ''} ${e.sub_msg || ''}`.toLowerCase();
       const tokenExpired = /token/.test(msg) && /(invalid|expire|expired|illegal)/.test(msg);
 
-      // Auto-refresh once on token expiry, then retry the same call.
-      if (tokenExpired && !_retried && cachedRefreshToken) {
-        console.warn('Access token rejected — refreshing and retrying once.');
-        await this.refreshAccessToken(cachedRefreshToken);
+      // Renew once and retry. Proactive refresh should normally prevent this,
+      // but a token can also be revoked server-side at any moment.
+      if (tokenExpired && !_retried) {
+        console.warn('[aliexpress] access token rejected — forcing refresh and retrying once');
         return this.call(method, businessParams, true);
       }
 
@@ -122,7 +236,14 @@ export class AliExpressDS {
    * Keyword product search.
    * Returns a normalized array of { id, title, priceUSD, image, url }.
    */
-  async searchProducts({ keyword, page = 1, pageSize = 20, countryCode = 'UG', currency = 'USD', locale = 'en_US' }) {
+  async searchProducts({
+    keyword,
+    page = 1,
+    pageSize = 20,
+    countryCode = CUSTOMER_DESTINATION.countryCode,
+    currency = 'USD',
+    locale = 'en_US',
+  }) {
     const resp = await this.call('aliexpress.ds.text.search', {
       keyWord: keyword,
       pageIndex: page,
@@ -148,7 +269,7 @@ export class AliExpressDS {
   }
 
   /** Full product detail by id — returns a normalized detail object. */
-  async getProduct({ productId, countryCode = 'UG', currency = 'USD', locale = 'en' }) {
+  async getProduct({ productId, countryCode = CUSTOMER_DESTINATION.countryCode, currency = 'USD', locale = 'en' }) {
     const resp = await this.call('aliexpress.ds.product.get', {
       product_id: productId,
       ship_to_country: countryCode,
@@ -164,9 +285,16 @@ export class AliExpressDS {
    * Shipping options for a product+sku to a country. Tells us whether the
    * product qualifies for FREE shipping (AliExpress Choice / Selection).
    */
-  async queryFreight({ productId, skuId, country = 'UG', currency = 'USD', locale = 'en_US' }) {
+  async queryFreight({
+    productId,
+    skuId,
+    quantity = 1,
+    country = CUSTOMER_DESTINATION.countryCode,
+    currency = 'USD',
+    locale = 'en_US',
+  }) {
     const req = {
-      quantity: 1,
+      quantity,
       shipToCountry: country,
       productId: String(productId),
       selectedSkuId: String(skuId),
@@ -179,7 +307,16 @@ export class AliExpressDS {
       queryDeliveryReq: JSON.stringify(req),
     });
     const body = resp.aliexpress_ds_freight_query_response || resp.result || resp;
-    const opts = asArray(body?.result?.delivery_options?.delivery_option_d_t_o);
+    const result = body?.result || {};
+    const opts = asArray(result?.delivery_options?.delivery_option_d_t_o);
+
+    // AliExpress answers "this seller does not ship to that country" with a
+    // success:false envelope (commonly DELIVERY_NOT_AVAILABLE_TO_YOUR_ADDRESS),
+    // not an error. That is a real, useful answer and must not be reported the
+    // same way as a lookup that failed — one means the product cannot be sold to
+    // this destination, the other means try again.
+    const refused = result.success === false;
+    const reason = refused ? result.msg || `code ${result.code}` : null;
 
     // Prefer a free option; otherwise pick the cheapest paid option and fold
     // its cost into the product price so the customer never sees a shipping fee.
@@ -192,9 +329,18 @@ export class AliExpressDS {
       : null;
 
     const chosen = free || cheapest?.opt || opts[0] || null;
-    const shippingCostUSD = free ? 0 : cheapest?.cost ?? 0;
+
+    // "No cost field" and "free" are different answers and must not collapse
+    // into the same one: quoting 0 for a shipment AliExpress never priced would
+    // silently hand the customer a discount we then have to pay for.
+    const shippingCostUSD = free ? 0 : cheapest ? cheapest.cost : null;
 
     return {
+      // Answered by AliExpress, one way or the other.
+      quoted: true,
+      deliverable: !refused && opts.length > 0,
+      reason,
+      available: opts.length > 0,
       freeShipping: Boolean(free),
       shippingCostUSD,
       company: chosen?.company || null,
@@ -262,21 +408,42 @@ export class AliExpressDS {
     }
   }
 
-  /** Exchange an authorization code for an access token. */
+  /**
+   * Exchange an authorization code for a token pair and persist it. Storing it
+   * here is what makes the authorization stick — the operator no longer has to
+   * copy a token into an env var, which is the step that used to expire.
+   */
   async exchangeCodeForToken(code) {
-    return this.restCall('/auth/token/create', { code });
+    const resp = await this.restCall('/auth/token/create', { code });
+    const parsed = parseTokenResponse(resp);
+    if (parsed.accessToken) await writeTokens(parsed);
+    return { resp, parsed, stored: Boolean(parsed.accessToken) };
   }
+}
 
-  /** Use a refresh token to get a fresh access token; updates the cache. */
-  async refreshAccessToken(refreshToken) {
-    const resp = await this.restCall('/auth/token/refresh', { refresh_token: refreshToken });
-    const at = resp.access_token || resp?.data?.access_token;
-    const rt = resp.refresh_token || resp?.data?.refresh_token;
-    if (at) cachedAccessToken = at;
-    if (rt) cachedRefreshToken = rt;
-    if (at) console.log('Access token refreshed successfully.');
-    return resp;
-  }
+/**
+ * Normalize a token response. AliExpress is inconsistent about where the pair
+ * sits and how expiry is expressed — sometimes a lifetime in seconds, sometimes
+ * an absolute epoch-millisecond timestamp — so both forms are accepted.
+ */
+function parseTokenResponse(resp = {}) {
+  const d = resp.data || resp;
+  return {
+    accessToken: d.access_token || null,
+    refreshToken: d.refresh_token || null,
+    accessExpiresAt: toExpiry(d.expire_time ?? d.expires_in),
+    refreshExpiresAt: toExpiry(d.refresh_token_valid_time ?? d.refresh_expires_in),
+  };
+}
+
+// Anything this large is an absolute epoch-millisecond timestamp rather than a
+// lifetime in seconds — no OAuth token lasts thirty thousand years.
+const EPOCH_MS_THRESHOLD = 1e12;
+
+function toExpiry(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(n >= EPOCH_MS_THRESHOLD ? n : Date.now() + n * 1000);
 }
 
 /** Map a raw AliExpress product object to our internal shape. */
@@ -286,16 +453,34 @@ function normalizeProduct(p) {
     p.targetSalePrice ?? p.target_sale_price ?? p.salePrice ?? p.sale_price ?? 0
   );
   const id = (p.itemId ?? p.product_id ?? p.productId ?? '').toString();
+  const skuId = extractSkuId(p);
   let url = p.itemUrl ?? p.product_detail_url ?? p.promotion_link ?? null;
   if (url && url.startsWith('//')) url = `https:${url}`;
   return {
     id,
+    skuId,
     title: p.title ?? p.product_title ?? p.subject ?? 'Untitled product',
     priceUSD: Number.isFinite(priceUSD) ? priceUSD : 0,
     image: p.itemMainPic ?? p.product_main_image_url ?? p.image_url ?? null,
     url: url ?? (id ? `https://www.aliexpress.com/item/${id}.html` : null),
     currency: p.targetOriginalPriceCurrency ?? 'USD',
   };
+}
+
+/**
+ * The SKU a search result was priced for.
+ *
+ * Freight is quoted per SKU, and the search response has no SKU field — but the
+ * item URL it returns carries the exact variant it priced. Without pulling it
+ * out of there the catalogue could not show shipping at all, only the detail
+ * page could.
+ */
+function extractSkuId(p) {
+  const direct = p.skuId ?? p.sku_id ?? p.selectedSkuId;
+  if (direct) return String(direct);
+  const raw = String(p.itemUrl ?? p.product_detail_url ?? '');
+  const m = raw.match(/[?&]skuId=(\d+)/);
+  return m ? m[1] : null;
 }
 
 /** Map the aliexpress.ds.product.get result into a clean detail object. */

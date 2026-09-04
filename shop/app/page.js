@@ -73,11 +73,39 @@ export default function Home() {
                 <h3 className="product-name">{p.title}</h3>
               </Link>
               <p className="product-price"><span className="new-price">{fmt(p.priceUGX)}</span></p>
+
+              {/* Shipping is stated per product because AliExpress charges it
+                  that way — some items ship free, some cost extra, and some
+                  sellers won't ship to our receiving house at all, which for a
+                  customer simply means the item can't be delivered. */}
+              <p className="product-ship">
+                {p.shipping?.deliverable === false
+                  ? <span className="ship-none">Not available for delivery</span>
+                  : !p.shipping?.known
+                    ? <span className="ship-unknown">Shipping calculated at checkout</span>
+                    : p.shipping.free
+                      ? <span className="ship-free">Free shipping</span>
+                      : <span className="ship-cost">+ {fmt(p.shipping.costUGX)} shipping</span>}
+              </p>
               <button
                 className="add-cart"
-                onClick={() => { add({ id: p.id, name: p.title, price: p.priceUGX, img: p.image }); setOpen(true); }}
+                // Offering an item the supplier won't ship to the destination
+                // would take payment for an order that can never be fulfilled.
+                disabled={p.shipping?.deliverable === false}
+                onClick={() => {
+                  add({
+                    id: p.id,
+                    name: p.title,
+                    price: p.priceUGX,
+                    img: p.image,
+                    skuId: p.skuId,
+                    shipUGX: p.shipping?.known ? p.shipping.costUGX : null,
+                    handlingUGX: p.handlingUGX,
+                  });
+                  setOpen(true);
+                }}
               >
-                Add to Cart
+                {p.shipping?.deliverable === false ? 'Unavailable' : 'Add to Cart'}
               </button>
             </article>
           ))}

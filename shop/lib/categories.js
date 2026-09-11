@@ -2,18 +2,21 @@
  * Storefront categories.
  *
  * A "category" here is just a starting keyword for the AliExpress search —
- * we don't maintain a catalogue. Each tile's artwork is the first real
- * product image the API returns for that keyword (see /api/categories);
- * `fallbackImg` is only used while that request is in flight or if it fails,
- * so the strip never renders empty.
+ * we don't maintain a catalogue. Every image on the homepage (category tiles
+ * and the hero) is a real product image pulled from the API, so the app ships
+ * no bundled product artwork at all. Tiles render an empty placeholder box
+ * until /api/categories responds.
  */
 export const CATEGORIES = [
-  { label: 'Earbuds',    keyword: 'wireless earbuds',     fallbackImg: '/images/float-earbuds.png' },
-  { label: 'Headphones', keyword: 'bluetooth headphones', fallbackImg: '/images/float-headphones.png' },
-  { label: 'Phones',     keyword: 'smartphone',           fallbackImg: '/images/float-phone.png' },
-  { label: 'Watches',    keyword: 'smart watch',          fallbackImg: '/images/float-watch.png' },
-  { label: 'Speakers',   keyword: 'bluetooth speaker',    fallbackImg: '/images/float-speaker.png' },
-  { label: 'Wi-Fi',      keyword: 'wifi router',          fallbackImg: '/images/wifi-router-ghost.png' },
-  { label: 'Fitness',    keyword: 'massage gun',          fallbackImg: '/images/massage-gun-ghost.png' },
-  { label: 'Home',       keyword: 'pest repeller',        fallbackImg: '/images/pest-repeller-ghost.png' },
+  { label: 'Earbuds',    keyword: 'wireless earbuds' },
+  { label: 'Headphones', keyword: 'bluetooth headphones' },
+  { label: 'Phones',     keyword: 'smartphone' },
+  { label: 'Watches',    keyword: 'smart watch' },
+  { label: 'Speakers',   keyword: 'bluetooth speaker' },
+  { label: 'Wi-Fi',      keyword: 'wifi router' },
+  { label: 'Fitness',    keyword: 'massage gun' },
+  { label: 'Home',       keyword: 'pest repeller' },
 ];
+
+/** Keyword whose top result is used as the hero image. */
+export const HERO_KEYWORD = 'bluetooth headphones';

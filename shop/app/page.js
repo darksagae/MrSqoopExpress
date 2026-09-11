@@ -9,9 +9,10 @@ const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
 
 export default function Home() {
-  // Real AliExpress product image per category, keyed by keyword. Starts empty
-  // and fills in from /api/categories; tiles show bundled art until then.
+  // Real AliExpress product imagery, fetched once from /api/categories.
+  // Until it lands, tiles and the hero render empty placeholder boxes.
   const [catImages, setCatImages] = useState({});
+  const [heroImage, setHeroImage] = useState(null);
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
   const [products, setProducts] = useState([]);
@@ -38,8 +39,9 @@ export default function Home() {
           if (c.image) byKeyword[c.keyword] = c.image;
         }
         setCatImages(byKeyword);
+        if (d.hero) setHeroImage(d.hero);
       })
-      .catch(() => {/* bundled artwork stays in place */});
+      .catch(() => {/* placeholders stay in place */});
     return () => { cancelled = true; };
   }, []);
 
@@ -151,8 +153,8 @@ export default function Home() {
               <em>FREE</em>
               <strong>SHIPPING</strong>
             </span>
-            <div className="hero-float">
-              <img src="/images/float-headphones.png" alt="" aria-hidden="true" />
+            <div className={`hero-float${heroImage ? '' : ' is-empty'}`}>
+              {heroImage && <img src={heroImage} alt="" aria-hidden="true" />}
             </div>
           </div>
         </div>
@@ -169,13 +171,10 @@ export default function Home() {
               className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
               onClick={() => pickCategory(cat)}
             >
-              <span className="cat-tile-img">
-                <img
-                  src={catImages[cat.keyword] || cat.fallbackImg}
-                  alt=""
-                  aria-hidden="true"
-                  onError={(e) => { e.currentTarget.src = cat.fallbackImg; }}
-                />
+              <span className={`cat-tile-img${catImages[cat.keyword] ? '' : ' is-empty'}`}>
+                {catImages[cat.keyword] && (
+                  <img src={catImages[cat.keyword]} alt="" aria-hidden="true" />
+                )}
               </span>
               <span className="cat-tile-label">{cat.label}</span>
             </button>

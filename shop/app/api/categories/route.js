@@ -1,30 +1,35 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES, HERO_KEYWORD } from '@/lib/categories';
 
 /**
  * GET /api/categories
  *
- * Returns the category strip with a real AliExpress product image for each
- * tile. One upstream call per category, so the result is cached for an hour
- * rather than re-fetched on every homepage view.
+ * Real AliExpress product imagery for the homepage: one image per category
+ * tile plus one for the hero. That's a handful of upstream calls, so the
+ * response is cached for an hour rather than re-fetched on every page view.
  *
- * Categories whose lookup fails come back with image: null — the client falls
- * back to the bundled artwork so a single upstream hiccup can't empty the row.
+ * Anything that fails comes back as null and the client renders an empty
+ * placeholder, so one bad keyword can't break the row.
  */
 export const revalidate = 3600;
+
+const firstImage = (r) =>
+  r.status === 'fulfilled' && r.value?.[0]?.image ? r.value[0].image : null;
 
 export async function GET() {
   if (!aliexpressDS.isConfigured()) {
     return NextResponse.json({
       success: true,
-      source: 'fallback',
+      source: 'unconfigured',
+      hero: null,
       categories: CATEGORIES.map(({ label, keyword }) => ({ label, keyword, image: null })),
     });
   }
 
+  const keywords = [...CATEGORIES.map((c) => c.keyword), HERO_KEYWORD];
   const results = await Promise.allSettled(
-    CATEGORIES.map(({ keyword }) =>
+    keywords.map((keyword) =>
       aliexpressDS.searchProducts({
         keyword,
         page: 1,
@@ -35,15 +40,20 @@ export async function GET() {
     )
   );
 
-  const categories = CATEGORIES.map(({ label, keyword }, i) => {
-    const r = results[i];
-    const image =
-      r.status === 'fulfilled' && r.value?.[0]?.image ? r.value[0].image : null;
+  results.forEach((r, i) => {
     if (r.status === 'rejected') {
-      console.warn(`Category image lookup failed for "${keyword}":`, r.reason?.message);
+      console.warn(`Image lookup failed for "${keywords[i]}":`, r.reason?.message);
     }
-    return { label, keyword, image };
   });
 
-  return NextResponse.json({ success: true, source: 'aliexpress', categories });
+  return NextResponse.json({
+    success: true,
+    source: 'aliexpress',
+    hero: firstImage(results[results.length - 1]),
+    categories: CATEGORIES.map(({ label, keyword }, i) => ({
+      label,
+      keyword,
+      image: firstImage(results[i]),
+    })),
+  });
 }

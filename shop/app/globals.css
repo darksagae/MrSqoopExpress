@@ -210,6 +210,15 @@ img { display: block; max-width: 100%; }
   align-items: center;
   justify-content: center;
 }
+.hero-float.is-empty,
+.cat-tile-img.is-empty {
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+.hero-float.is-empty { min-height: 300px; }
+.hero-float.is-empty::after,
+.cat-tile-img.is-empty::after { display: none; }
+
 .hero-float::after {
   content: '';
   position: absolute;
@@ -228,7 +237,6 @@ img { display: block; max-width: 100%; }
   width: 100%;
   height: auto;
   object-fit: contain;
-  filter: grayscale(1); /* keeps the hero strictly black-and-white */
   animation: float-in-space 5.5s ease-in-out infinite;
 }
 .hero-disc {

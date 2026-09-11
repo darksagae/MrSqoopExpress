@@ -7,6 +7,20 @@ import { useCart } from './cart';
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
 
+// Category tiles. Each one is just an AliExpress keyword search — the API can
+// fetch anything, so a "category" here is a curated starting query, not a
+// fixed catalogue we have to maintain.
+const CATEGORIES = [
+  { label: 'Earbuds',    keyword: 'wireless earbuds',        img: '/images/float-earbuds.png' },
+  { label: 'Headphones', keyword: 'bluetooth headphones',    img: '/images/float-headphones.png' },
+  { label: 'Phones',     keyword: 'smartphone',              img: '/images/float-phone.png' },
+  { label: 'Watches',    keyword: 'smart watch',             img: '/images/float-watch.png' },
+  { label: 'Speakers',   keyword: 'bluetooth speaker',       img: '/images/float-speaker.png' },
+  { label: 'Wi-Fi',      keyword: 'wifi router',             img: '/images/wifi-router-ghost.png' },
+  { label: 'Fitness',    keyword: 'massage gun',             img: '/images/massage-gun-ghost.png' },
+  { label: 'Home',       keyword: 'pest repeller',           img: '/images/pest-repeller-ghost.png' },
+];
+
 export default function Home() {
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
@@ -19,6 +33,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true); // initial search / new keyword
   const [loadingMore, setLoadingMore] = useState(false); // appending next page
   const [error, setError] = useState(null);
+
+  const { add, setOpen } = useCart();
 
   // New search term: reset to page 1 and replace the list.
   useEffect(() => {
@@ -74,70 +90,158 @@ export default function Home() {
     if (keyword.trim()) setQuery(keyword.trim());
   };
 
+  const pickCategory = (cat) => {
+    setKeyword(cat.keyword);
+    setQuery(cat.keyword);
+    document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
-    <section className="section" id="shop">
-      <form className="shop-search" onSubmit={submitSearch}>
-        <input
-          type="text"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          placeholder="Search products…"
-        />
-        <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
-      </form>
+    <>
+      {/* ===== Hero ===== */}
+      <section className="hero">
+        <div className="hero-inner">
+          <div className="hero-copy">
+            <p className="hero-eyebrow">Welcome to MrSqoopExpress</p>
+            <h1 className="hero-title">
+              EVERYTHING.<br />DELIVERED.
+            </h1>
+            <p className="hero-script">Quality tech, straight to Uganda.</p>
+            <p className="hero-sub">
+              Search millions of products and pay with Mobile Money.
+              We handle the sourcing, shipping and delivery.
+            </p>
 
-      {loading && <p className="shop-status">Loading products…</p>}
+            <div className="hero-actions">
+              <a href="#shop" className="btn-solid">Shop Now <span aria-hidden="true">→</span></a>
+              <a href="#categories" className="btn-outline">Browse Categories</a>
+            </div>
 
-      {error && !loading && (
-        <div className="shop-status error">
-          <strong>{error.error || 'Could not load products'}</strong>
-          {error.message && <div className="hint">{error.message}</div>}
-          {error.hint && <div className="hint">{error.hint}</div>}
-        </div>
-      )}
-
-      {!loading && !error && products.length === 0 && (
-        <p className="shop-status">No products found for “{query}”. Try another search.</p>
-      )}
-
-      {!loading && !error && products.length > 0 && (
-        <>
-          <div className="product-grid">
-            {products.map((p) => (
-              <article className="product-card" key={p.id}>
-                <Link href={`/product/${p.id}`} className="product-img">
-                  {p.image && <img src={p.image} alt={p.title} />}
-                </Link>
-                <Link href={`/product/${p.id}`}>
-                  <h3 className="product-name">{p.title}</h3>
-                </Link>
-                <p className="product-price"><span className="new-price">{fmt(p.priceUGX)}</span></p>
-                <button
-                  className="add-cart"
-                  onClick={() => { add({ id: p.id, name: p.title, price: p.priceUGX, img: p.image }); setOpen(true); }}
-                >
-                  Add to Cart
-                </button>
-              </article>
-            ))}
+            <ul className="hero-badges">
+              <li>
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                  <path d="M1 7h12v10H1z" /><path d="M13 10h4.5L22 13.5V17h-9" /><circle cx="6" cy="18.5" r="1.8" /><circle cx="17.5" cy="18.5" r="1.8" />
+                </svg>
+                <div><strong>Express Shipping</strong><span>Within 15 business days</span></div>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 1 3 6.7" /><polyline points="3 20 3 14 9 14" />
+                </svg>
+                <div><strong>Order Tracking</strong><span>Follow every step</span></div>
+              </li>
+              <li>
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                  <rect x="3" y="10" width="18" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
+                </svg>
+                <div><strong>Mobile Money</strong><span>Secure checkout</span></div>
+              </li>
+            </ul>
           </div>
 
-          {hasMore && (
+          <div className="hero-visual">
+            <span className="hero-disc">
+              <em>FREE</em>
+              <strong>SHIPPING</strong>
+            </span>
+            <div className="hero-float">
+              <img src="/images/float-headphones.png" alt="" aria-hidden="true" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== Categories ===== */}
+      <section className="section cat-section" id="categories">
+        <h2 className="section-title">Browse by Category</h2>
+        <div className="cat-strip">
+          {CATEGORIES.map((cat) => (
             <button
               type="button"
-              className="load-more"
-              onClick={loadMore}
-              disabled={loadingMore}
+              key={cat.label}
+              className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
+              onClick={() => pickCategory(cat)}
             >
-              {loadingMore ? 'Loading…' : 'View More'}
+              <span className="cat-tile-img">
+                <img src={cat.img} alt="" aria-hidden="true" />
+              </span>
+              <span className="cat-tile-label">{cat.label}</span>
             </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ===== Products ===== */}
+      <section className="section section-space" id="shop">
+        <div className="space-inner">
+          <div className="shop-head">
+            <h2 className="section-title">{query ? `Results for “${query}”` : 'Trending Products'}</h2>
+          </div>
+
+          <form className="shop-search" onSubmit={submitSearch}>
+            <input
+              type="text"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              placeholder="Search any product…"
+            />
+            <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
+          </form>
+
+          {loading && <p className="shop-status">Loading products…</p>}
+
+          {error && !loading && (
+            <div className="shop-status error">
+              <strong>{error.error || 'Could not load products'}</strong>
+              {error.message && <div className="hint">{error.message}</div>}
+              {error.hint && <div className="hint">{error.hint}</div>}
+            </div>
           )}
 
-          {!hasMore && (
-            <p className="shop-status">You’ve reached the end of the results for “{query}”.</p>
+          {!loading && !error && products.length === 0 && (
+            <p className="shop-status">No products found for “{query}”. Try another search.</p>
           )}
-        </>
-      )}
-    </section>
+
+          {!loading && !error && products.length > 0 && (
+            <>
+              <div className="product-grid">
+                {products.map((p) => (
+                  <article className="product-card" key={p.id}>
+                    <Link href={`/product/${p.id}`} className="product-img">
+                      {p.image && <img src={p.image} alt={p.title} />}
+                    </Link>
+                    <Link href={`/product/${p.id}`}>
+                      <h3 className="product-name">{p.title}</h3>
+                    </Link>
+                    <p className="product-price"><span className="new-price">{fmt(p.priceUGX)}</span></p>
+                    <button
+                      className="add-cart"
+                      onClick={() => { add({ id: p.id, name: p.title, price: p.priceUGX, img: p.image }); setOpen(true); }}
+                    >
+                      Add to Cart
+                    </button>
+                  </article>
+                ))}
+              </div>
+
+              {hasMore && (
+                <button
+                  type="button"
+                  className="load-more"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? 'Loading…' : 'View More'}
+                </button>
+              )}
+
+              {!hasMore && (
+                <p className="shop-status">You’ve reached the end of the results for “{query}”.</p>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+    </>
   );
 }

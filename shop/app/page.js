@@ -3,25 +3,15 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from './cart';
+import { CATEGORIES } from '@/lib/categories';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
 
-// Category tiles. Each one is just an AliExpress keyword search — the API can
-// fetch anything, so a "category" here is a curated starting query, not a
-// fixed catalogue we have to maintain.
-const CATEGORIES = [
-  { label: 'Earbuds',    keyword: 'wireless earbuds',        img: '/images/float-earbuds.png' },
-  { label: 'Headphones', keyword: 'bluetooth headphones',    img: '/images/float-headphones.png' },
-  { label: 'Phones',     keyword: 'smartphone',              img: '/images/float-phone.png' },
-  { label: 'Watches',    keyword: 'smart watch',             img: '/images/float-watch.png' },
-  { label: 'Speakers',   keyword: 'bluetooth speaker',       img: '/images/float-speaker.png' },
-  { label: 'Wi-Fi',      keyword: 'wifi router',             img: '/images/wifi-router-ghost.png' },
-  { label: 'Fitness',    keyword: 'massage gun',             img: '/images/massage-gun-ghost.png' },
-  { label: 'Home',       keyword: 'pest repeller',           img: '/images/pest-repeller-ghost.png' },
-];
-
 export default function Home() {
+  // Real AliExpress product image per category, keyed by keyword. Starts empty
+  // and fills in from /api/categories; tiles show bundled art until then.
+  const [catImages, setCatImages] = useState({});
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
   const [products, setProducts] = useState([]);
@@ -35,6 +25,23 @@ export default function Home() {
   const [error, setError] = useState(null);
 
   const { add, setOpen } = useCart();
+
+  // Category artwork — fetched once, cached upstream for an hour.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/categories')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.categories) return;
+        const byKeyword = {};
+        for (const c of d.categories) {
+          if (c.image) byKeyword[c.keyword] = c.image;
+        }
+        setCatImages(byKeyword);
+      })
+      .catch(() => {/* bundled artwork stays in place */});
+    return () => { cancelled = true; };
+  }, []);
 
   // New search term: reset to page 1 and replace the list.
   useEffect(() => {
@@ -163,7 +170,12 @@ export default function Home() {
               onClick={() => pickCategory(cat)}
             >
               <span className="cat-tile-img">
-                <img src={cat.img} alt="" aria-hidden="true" />
+                <img
+                  src={catImages[cat.keyword] || cat.fallbackImg}
+                  alt=""
+                  aria-hidden="true"
+                  onError={(e) => { e.currentTarget.src = cat.fallbackImg; }}
+                />
               </span>
               <span className="cat-tile-label">{cat.label}</span>
             </button>

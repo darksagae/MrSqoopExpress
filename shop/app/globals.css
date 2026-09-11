@@ -753,10 +753,9 @@ img { display: block; max-width: 100%; }
   width: auto;
   height: auto;
   object-fit: contain;
-  /* Category art is brand furniture, not merchandise — desaturate it so the
-     strip stays black-and-white. Real product photos in the grid below keep
-     their true colour so customers see what they're buying. */
-  filter: grayscale(1);
+  /* Real product photos — left in true colour so customers see what they're
+     buying, same as the grid. The black-and-white palette governs the UI
+     chrome (type, buttons, backgrounds), not the merchandise. */
   animation: float-in-space 5.5s ease-in-out infinite;
   transition: transform .3s;
 }

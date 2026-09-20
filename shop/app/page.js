@@ -129,7 +129,7 @@ export default function Home() {
             <ul className="hero-badges">
               <li>
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                  <path d="M1 7h12v10H1z" /><path d="M13 10h4.5L22 13.5V17h-9" /><circle cx="6" cy="18.5" r="1.8" /><circle cx="17.5" cy="18.5" r="1.8" />
+                  <path d="M22 12.5l-7.5-3.2V4a1.5 1.5 0 0 0-3 0v5.3L4 12.5v2l7.5-2.3V18l-2.5 1.7V21l3-1 3 1v-1.3L12.5 18v-5.8L20 14.5v-2z" />
                 </svg>
                 <div><strong>Express Shipping</strong><span>To Uganda within 7-15 business days</span></div>
               </li>

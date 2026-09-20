@@ -11,18 +11,18 @@
  * until /api/categories responds.
  */
 export const CATEGORIES = [
-  { label: 'Electronics',  keyword: 'electronics gadgets' },
-  { label: 'Phones',       keyword: 'phone accessories' },
-  { label: 'Fashion',      keyword: 'fashion clothing' },
-  { label: 'Home',         keyword: 'kitchen gadgets' },
-  { label: 'Beauty',       keyword: 'beauty tools' },
-  { label: 'Fitness',      keyword: 'fitness equipment' },
-  { label: 'Baby & Kids',  keyword: 'baby toys' },
-  { label: 'Pet Supplies', keyword: 'pet supplies' },
-  { label: 'Automotive',   keyword: 'car accessories' },
-  { label: 'Tools',        keyword: 'hand tools' },
-  { label: 'Bags',         keyword: 'travel bags' },
-  { label: 'Office',       keyword: 'office supplies' },
+  { label: 'Electronics',                  keyword: 'laptop' },
+  { label: 'Phones & Tablets',             keyword: 'smartphone' },
+  { label: 'Fashion',                      keyword: 'men trousers' },
+  { label: 'Home, Furniture & Appliances', keyword: 'furniture chair' },
+  { label: 'Beauty & Personal Care',       keyword: 'beauty products' },
+  { label: 'Fitness',                      keyword: 'fitness equipment' },
+  { label: 'Baby & Kids',                  keyword: 'baby toys' },
+  { label: 'Pet Supplies',                 keyword: 'pet supplies' },
+  { label: 'Automotive',                   keyword: 'car accessories' },
+  { label: 'Tools',                        keyword: 'hand tools' },
+  { label: 'Bags',                         keyword: 'travel bags' },
+  { label: 'Office',                       keyword: 'office supplies' },
 ];
 
 /** Keyword whose top result is used as the hero image. */

@@ -62,7 +62,7 @@ export default function Home() {
         } else {
           const list = d.products || [];
           setProducts(list);
-          setHasMore(list.length >= PAGE_SIZE);
+          setHasMore(Boolean(d.hasMore));
         }
       })
       .catch((e) => !cancelled && setError({ error: 'Network error', message: e.message }))
@@ -88,7 +88,7 @@ export default function Home() {
           return [...prev, ...list.filter((p) => !seen.has(p.id))];
         });
         setPage(nextPage);
-        setHasMore(list.length >= PAGE_SIZE);
+        setHasMore(Boolean(d.hasMore));
       })
       .catch(() => setHasMore(false))
       .finally(() => setLoadingMore(false));

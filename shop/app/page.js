@@ -4,15 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCart } from './cart';
 import { CATEGORIES } from '@/lib/categories';
-import CategoryIcon from './components/CategoryIcons';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
 
 export default function Home() {
-  // Real AliExpress product imagery for the hero, fetched once from
-  // /api/categories. Category tiles use a fixed icon set instead (see
-  // CategoryIcons.js), so only the hero image needs to load in.
+  // Real AliExpress product imagery, fetched once from /api/categories.
+  // Until it lands, tiles and the hero render empty placeholder boxes.
+  const [catImages, setCatImages] = useState({});
   const [heroImage, setHeroImage] = useState(null);
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
@@ -28,16 +27,21 @@ export default function Home() {
 
   const { add, setOpen } = useCart();
 
-  // Hero artwork — fetched once, cached upstream for an hour.
+  // Category artwork — fetched once, cached upstream for an hour.
   useEffect(() => {
     let cancelled = false;
     fetch('/api/categories')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (cancelled) return;
-        if (d?.hero) setHeroImage(d.hero);
+        if (cancelled || !d?.categories) return;
+        const byKeyword = {};
+        for (const c of d.categories) {
+          if (c.image) byKeyword[c.keyword] = c.image;
+        }
+        setCatImages(byKeyword);
+        if (d.hero) setHeroImage(d.hero);
       })
-      .catch(() => {/* placeholder stays in place */});
+      .catch(() => {/* placeholders stay in place */});
     return () => { cancelled = true; };
   }, []);
 
@@ -167,8 +171,10 @@ export default function Home() {
               className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
               onClick={() => pickCategory(cat)}
             >
-              <span className="cat-tile-icon">
-                <CategoryIcon name={cat.icon} />
+              <span className={`cat-tile-img${catImages[cat.keyword] ? '' : ' is-empty'}`}>
+                {catImages[cat.keyword] && (
+                  <img src={catImages[cat.keyword]} alt="" aria-hidden="true" />
+                )}
               </span>
               <span className="cat-tile-label">{cat.label}</span>
             </button>

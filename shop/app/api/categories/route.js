@@ -14,8 +14,17 @@ import { CATEGORIES, HERO_KEYWORD } from '@/lib/categories';
  */
 export const revalidate = 3600;
 
-const firstImage = (r) =>
-  r.status === 'fulfilled' && r.value?.[0]?.image ? r.value[0].image : null;
+// Best-seller sort, not the default relevance ranking: the top relevance hit
+// for a broad keyword is often a one-off listing whose photo is a
+// promotional graphic (badges, callout text, a collage of variants) rather
+// than a clean product shot. Established best-sellers are far more likely
+// to carry standard catalog photography. A few results are fetched per
+// keyword — not just one — so a listing with a missing image doesn't leave
+// the tile empty.
+const firstImage = (r) => {
+  if (r.status !== 'fulfilled') return null;
+  return r.value.find((p) => p?.image)?.image || null;
+};
 
 export async function GET() {
   if (!aliexpressDS.hasCredentials()) {
@@ -33,9 +42,10 @@ export async function GET() {
       aliexpressDS.searchProducts({
         keyword,
         page: 1,
-        pageSize: 1,
+        pageSize: 5,
         countryCode: 'UG',
         currency: 'USD',
+        sort: 'orders_desc',
       })
     )
   );

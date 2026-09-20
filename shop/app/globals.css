@@ -715,8 +715,9 @@ img { display: block; max-width: 100%; }
 .load-more:disabled { border-color: #bbb; color: #bbb; cursor: default; background: #fff; }
 
 /* ===== Category strip ===== */
-/* Tiles are transparent — the product floats in open air, no card, no padding
-   box around it. Only the label sits underneath. */
+/* Each photo sits in a soft rounded-square card — a uniform, tidy grid
+   regardless of what background or aspect ratio the underlying AliExpress
+   listing photo happens to have. */
 .cat-section { padding-bottom: 20px; }
 .cat-strip {
   display: grid;
@@ -736,53 +737,31 @@ img { display: block; max-width: 100%; }
   gap: 10px;
   min-width: 0;
 }
-/* Fixed box height — the source images have wildly different aspect ratios,
-   so a flexible box lets a tall one (the phone) blow out the whole row. */
 .cat-tile-img {
   position: relative;
   width: 100%;
-  height: 120px;
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  background: #f3f3f6;
   display: flex;
   align-items: center;
   justify-content: center;
-  isolation: isolate;
+  overflow: hidden;
+  padding: 14%;
+  box-sizing: border-box;
+  transition: background .2s;
 }
-.cat-tile-img.is-empty {
-  background: #f0f0f0;
-  border-radius: 4px;
-}
-.cat-tile-img.is-empty::after { display: none; }
-.cat-tile-img::after {
-  content: '';
-  position: absolute;
-  left: 24%;
-  right: 24%;
-  bottom: 8%;
-  height: 12%;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,.14) 0%, transparent 70%);
-  filter: blur(5px);
-  z-index: 0;
-  animation: shadow-breathe 5.5s ease-in-out infinite;
-}
+.cat-tile:hover .cat-tile-img { background: #ebebef; }
+.cat-tile.is-active .cat-tile-img { box-shadow: inset 0 0 0 2px #1a1a1a; }
 .cat-tile-img img {
-  position: relative;
-  z-index: 1;
   max-width: 100%;
   max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
-  /* Real product photos — left in true colour so customers see what they're
-     buying, same as the grid. The black-and-white palette governs the UI
-     chrome (type, buttons, backgrounds), not the merchandise. */
-  animation: float-in-space 5.5s ease-in-out infinite;
   transition: transform .3s;
 }
-.cat-tile:nth-child(2n) .cat-tile-img img,
-.cat-tile:nth-child(2n) .cat-tile-img::after { animation-delay: -1.1s; }
-.cat-tile:nth-child(3n) .cat-tile-img img,
-.cat-tile:nth-child(3n) .cat-tile-img::after { animation-delay: -2.2s; }
-.cat-tile:hover .cat-tile-img img { transform: scale(1.08) translateY(-6px); }
+.cat-tile:hover .cat-tile-img img { transform: scale(1.06); }
 .cat-tile-label {
   font-size: 13px;
   color: #555;
@@ -802,9 +781,7 @@ img { display: block; max-width: 100%; }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-float img,
-  .hero-float::after,
-  .cat-tile-img img,
-  .cat-tile-img::after {
+  .hero-float::after {
     animation: none !important;
   }
 }

@@ -243,6 +243,7 @@ export class AliExpressDS {
     countryCode = CUSTOMER_DESTINATION.countryCode,
     currency = 'USD',
     locale = 'en_US',
+    sort,
   }) {
     const resp = await this.call('aliexpress.ds.text.search', {
       keyWord: keyword,
@@ -251,6 +252,7 @@ export class AliExpressDS {
       countryCode,
       currency,
       local: locale,
+      ...(sort ? { sort } : {}),
     });
 
     // Response shape lives under aliexpress_ds_text_search_response.

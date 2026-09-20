@@ -115,7 +115,7 @@ export default function Home() {
             <h1 className="hero-title">
               EVERYTHING.<br />DELIVERED.
             </h1>
-            <p className="hero-script">Quality tech, straight to Uganda.</p>
+            <p className="hero-script">Quality products, straight to Uganda.</p>
             <p className="hero-sub">
               Search millions of products and pay with Mobile Money.
               We process, ship and deliver to your door.

@@ -24,7 +24,7 @@ export default function SiteHeader() {
         </nav>
         <Link href="/" className="logo">
           <span className="logo-title">MrSqoopExpress</span>
-          <span className="logo-sub">EXPRESS TECH SHOP</span>
+          <span className="logo-sub">EXPRESS PRODUCTS SHOP</span>
         </Link>
         <div className="nav-right">
           <Link href="/#shop" className="icon-btn" aria-label="Search">

@@ -6,8 +6,8 @@ import SiteFooter from './components/SiteFooter';
 import CartDrawer from './components/CartDrawer';
 
 export const metadata = {
-  title: 'MrSqoopExpress — Express Tech Shop',
-  description: 'Quality tech and lifestyle products, delivered in Uganda.',
+  title: 'MrSqoopExpress — Express Products Shop',
+  description: 'Quality products, delivered in Uganda.',
 };
 
 export default function RootLayout({ children }) {

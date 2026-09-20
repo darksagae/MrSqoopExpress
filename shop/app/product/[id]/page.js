@@ -175,7 +175,7 @@ export default function ProductDetail() {
               : !ship?.known
               ? 'Shipping calculated at checkout'
               : ship.free
-                ? '✓ Free shipping'
+                ? '✓ Express shipping'
                 : `Shipping ${fmt(ship.costUGX)}`}
             {!shipLoading && ship?.destination ? ` to ${ship.destination}` : ''}
             {!shipLoading && deliveryText ? ` · arrives in ${deliveryText}` : ''}

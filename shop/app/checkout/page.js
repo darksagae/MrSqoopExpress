@@ -263,7 +263,7 @@ export default function CheckoutPage() {
                     {c.shipUGX == null
                       ? ' · shipping TBC'
                       : c.shipUGX === 0
-                        ? ' · free shipping'
+                        ? ' · express shipping'
                         : ` · +${fmt(c.shipUGX)} shipping`}
                   </div>
                 </div>

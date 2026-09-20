@@ -18,7 +18,7 @@ const firstImage = (r) =>
   r.status === 'fulfilled' && r.value?.[0]?.image ? r.value[0].image : null;
 
 export async function GET() {
-  if (!aliexpressDS.isConfigured()) {
+  if (!aliexpressDS.hasCredentials()) {
     return NextResponse.json({
       success: true,
       source: 'unconfigured',

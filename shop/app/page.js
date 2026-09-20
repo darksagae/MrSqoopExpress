@@ -131,7 +131,7 @@ export default function Home() {
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
                   <path d="M1 7h12v10H1z" /><path d="M13 10h4.5L22 13.5V17h-9" /><circle cx="6" cy="18.5" r="1.8" /><circle cx="17.5" cy="18.5" r="1.8" />
                 </svg>
-                <div><strong>Express Shipping</strong><span>Within 15 business days</span></div>
+                <div><strong>Express Shipping</strong><span>To Uganda within 7-15 business days</span></div>
               </li>
               <li>
                 <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">

@@ -12,7 +12,7 @@ export default function SiteHeader() {
       <div className="announcement">
         <div className="marquee">
           {Array.from({ length: 10 }).map((_, i) => (
-            <span key={i}>express shipping within 15 business days</span>
+            <span key={i}>express shipping to Uganda within 7-15 business days</span>
           ))}
         </div>
       </div>

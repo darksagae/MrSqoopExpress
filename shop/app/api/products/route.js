@@ -145,12 +145,13 @@ export async function GET(request) {
     return NextResponse.json({
       success: true,
       count: shown.length,
-      // Whether AliExpress likely has more results for the next page. Judged
-      // by the raw fetch, not the post-filter count: a page can come back
-      // thin because many items don't ship to Uganda, not because AliExpress
-      // ran out of matches — using the filtered count here would end
-      // pagination early on exactly the keywords with the most filtering.
-      hasMore: products.length >= fetchSize,
+      // Whether AliExpress likely has more results for the next page. AliExpress
+      // caps how many items text.search returns per call independent of the
+      // pageSize we ask for, so a page never actually fills fetchSize — the
+      // only real "no more results" signal is an empty page. Everything short
+      // of that (including a page thinned by shipping filtering) still means
+      // there's more to try.
+      hasMore: products.length > 0,
       // How many the filter removed, so a thin page is explainable rather than
       // looking like the search simply found little.
       removedUndeliverable: priced.filter((p) => p.shipping.deliverable === false).length,

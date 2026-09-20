@@ -66,7 +66,7 @@ img { display: block; max-width: 100%; }
 .logo-sub {
   display: block;
   font-size: 8px;
-  letter-spacing: 3px;
+  letter-spacing: 1px;
   color: #999;
   margin-top: 3px;
 }
@@ -859,7 +859,7 @@ img { display: block; max-width: 100%; }
   .nav-left { display: flex; }
   .nav-left a { font-size: 13px; }
   .logo-title { font-size: 19px; letter-spacing: .5px; }
-  .logo-sub { font-size: 7px; letter-spacing: 2px; }
+  .logo-sub { font-size: 6.5px; letter-spacing: .6px; }
   .nav-right { gap: 12px; }
 
   .section { padding: 44px 18px; }

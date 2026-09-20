@@ -257,7 +257,7 @@ img { display: block; max-width: 100%; }
 }
 .hero-disc em {
   font-style: normal;
-  font-size: 20px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: .5px;
 }
@@ -813,7 +813,7 @@ img { display: block; max-width: 100%; }
   .hero-visual { order: -1; min-height: 0; }
   .hero-float { max-width: 300px; }
   .hero-disc { width: 84px; height: 84px; top: 0; left: 0; }
-  .hero-disc em { font-size: 16px; }
+  .hero-disc em { font-size: 11px; }
 
   .cat-strip { grid-template-columns: repeat(4, 1fr); gap: 12px; }
 }

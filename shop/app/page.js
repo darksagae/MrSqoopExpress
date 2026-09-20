@@ -150,7 +150,7 @@ export default function Home() {
 
           <div className="hero-visual">
             <span className="hero-disc">
-              <em>FREE</em>
+              <em>EXPRESS</em>
               <strong>SHIPPING</strong>
             </span>
             <div className={`hero-float${heroImage ? '' : ' is-empty'}`}>

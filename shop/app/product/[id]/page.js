@@ -7,6 +7,27 @@ import { useCart } from '../../cart';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 
+const MONTHS_SHORT = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
+const fmtShortDate = (d) => `${MONTHS_SHORT[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}`;
+
+/** N business days (Mon–Fri) from today, skipping weekends. */
+const businessDaysFromNow = (days) => {
+  const d = new Date();
+  let added = 0;
+  while (added < days) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0 && d.getDay() !== 6) added++;
+  }
+  return d;
+};
+
+// The site promises 7-15 business days everywhere else (header marquee, hero
+// badge), so the estimate here is computed from that same promise rather than
+// trusting AliExpress's own delivery_date_desc — a courier's raw estimate can
+// span 30+ days and contradict what the rest of the page tells the customer.
+const deliveryWindow = () =>
+  `${fmtShortDate(businessDaysFromNow(7))} - ${fmtShortDate(businessDaysFromNow(15))}`;
+
 export default function ProductDetail() {
   const { id } = useParams();
   const { add, setOpen } = useCart();
@@ -84,8 +105,7 @@ export default function ProductDetail() {
   // Carried into the cart so checkout can total it. Not shown here — the
   // storefront quotes product cost and shipping only.
   const handlingUGX = variant?.handlingUGX ?? product.handlingUGX ?? 0;
-  const deliveryText =
-    ship?.desc || (ship?.minDays && ship?.maxDays ? `${ship.minDays}–${ship.maxDays} days` : null);
+  const deliveryText = deliveryWindow();
 
   const addToCart = () => {
     add(

@@ -46,8 +46,8 @@ export const WAREHOUSE_LABEL = 'Deira, Dubai — United Arab Emirates';
  * burying a margin inside it would make that claim false.
  */
 export const HANDLING_FEE_PERCENT = (() => {
-  const n = Number(process.env.NEXT_PUBLIC_HANDLING_FEE_PERCENT ?? '35');
-  return Number.isFinite(n) && n >= 0 ? n : 35;
+  const n = Number(process.env.NEXT_PUBLIC_HANDLING_FEE_PERCENT ?? '38');
+  return Number.isFinite(n) && n >= 0 ? n : 38;
 })();
 
 /** Handling fee for a given product price, in the same currency. */

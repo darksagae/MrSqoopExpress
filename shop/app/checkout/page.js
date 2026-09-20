@@ -283,7 +283,7 @@ export default function CheckoutPage() {
           {/* The rate itself is not disclosed — only the amount it comes to. */}
           {handling > 0 && (
             <div className="co-summary-row">
-              <span>MrSqoopExpress handling</span>
+              <span>Handling</span>
               <span>{fmt(handling)}</span>
             </div>
           )}

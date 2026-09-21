@@ -13,6 +13,10 @@ export default function Home() {
   // Until it lands, tiles and the hero render empty placeholder boxes.
   const [catImages, setCatImages] = useState({});
   const [heroImage, setHeroImage] = useState(null);
+  // One image per category (already fetched for the tiles below) doubles as
+  // a rotation pool for the hero, so it showcases the range of what's sold
+  // rather than sitting on a single fixed product.
+  const [heroPool, setHeroPool] = useState([]);
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
   const [products, setProducts] = useState([]);
@@ -39,11 +43,25 @@ export default function Home() {
           if (c.image) byKeyword[c.keyword] = c.image;
         }
         setCatImages(byKeyword);
-        if (d.hero) setHeroImage(d.hero);
+        const pool = [d.hero, ...d.categories.map((c) => c.image)].filter(Boolean);
+        setHeroPool(pool);
+        if (pool[0]) setHeroImage(pool[0]);
       })
       .catch(() => {/* placeholders stay in place */});
     return () => { cancelled = true; };
   }, []);
+
+  // Cycle the hero through one product per category so it showcases the
+  // range of what's sold, rather than a single fixed item forever.
+  useEffect(() => {
+    if (heroPool.length < 2) return;
+    let i = 0;
+    const id = setInterval(() => {
+      i = (i + 1) % heroPool.length;
+      setHeroImage(heroPool[i]);
+    }, 4000);
+    return () => clearInterval(id);
+  }, [heroPool]);
 
   // New search term: reset to page 1 and replace the list.
   useEffect(() => {
@@ -154,7 +172,7 @@ export default function Home() {
               <strong>SHIPPING</strong>
             </span>
             <div className={`hero-float${heroImage ? '' : ' is-empty'}`}>
-              {heroImage && <img src={heroImage} alt="" aria-hidden="true" />}
+              {heroImage && <img key={heroImage} src={heroImage} alt="" aria-hidden="true" />}
             </div>
           </div>
         </div>

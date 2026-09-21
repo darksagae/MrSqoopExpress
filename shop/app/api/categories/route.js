@@ -1,16 +1,17 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
-import { CATEGORIES, HERO_KEYWORD } from '@/lib/categories';
+import { CATEGORIES, HERO_TRENDING_KEYWORDS } from '@/lib/categories';
 
 /**
  * GET /api/categories
  *
  * Real AliExpress product imagery for the homepage: one image per category
- * tile plus one for the hero. That's a handful of upstream calls, so the
- * response is cached for an hour rather than re-fetched on every page view.
+ * tile, plus a pool of trending images for the rotating hero. That's a
+ * handful of upstream calls, so the response is cached for an hour rather
+ * than re-fetched on every page view.
  *
- * Anything that fails comes back as null and the client renders an empty
- * placeholder, so one bad keyword can't break the row.
+ * Anything that fails comes back as null/empty and the client renders an
+ * empty placeholder, so one bad keyword can't break the row.
  */
 export const revalidate = 3600;
 
@@ -20,11 +21,18 @@ export const revalidate = 3600;
 // than a clean product shot. Established best-sellers are far more likely
 // to carry standard catalog photography. A few results are fetched per
 // keyword — not just one — so a listing with a missing image doesn't leave
-// the tile empty.
-const firstImage = (r) => {
-  if (r.status !== 'fulfilled') return null;
-  return r.value.find((p) => p?.image)?.image || null;
-};
+// the tile empty, and so the hero pool has more than one candidate per term.
+const allImages = (r) => (r.status === 'fulfilled' ? r.value.map((p) => p?.image).filter(Boolean) : []);
+const firstImage = (r) => allImages(r)[0] || null;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export async function GET() {
   if (!aliexpressDS.hasCredentials()) {
@@ -32,11 +40,13 @@ export async function GET() {
       success: true,
       source: 'unconfigured',
       hero: null,
+      heroPool: [],
       categories: CATEGORIES.map(({ label, keyword }) => ({ label, keyword, image: null })),
     });
   }
 
-  const keywords = [...CATEGORIES.map((c) => c.keyword), HERO_KEYWORD];
+  const categoryKeywords = CATEGORIES.map((c) => c.keyword);
+  const keywords = [...categoryKeywords, ...HERO_TRENDING_KEYWORDS];
   const results = await Promise.allSettled(
     keywords.map((keyword) =>
       aliexpressDS.searchProducts({
@@ -56,14 +66,23 @@ export async function GET() {
     }
   });
 
+  const categoryResults = results.slice(0, categoryKeywords.length);
+  const trendingResults = results.slice(categoryKeywords.length);
+
+  // Pool of trending images for the hero: every image from every trending
+  // keyword's top 5 best-sellers, deduplicated and shuffled so the rotation
+  // order isn't identical on every page load.
+  const heroPool = shuffle([...new Set(trendingResults.flatMap(allImages))]);
+
   return NextResponse.json({
     success: true,
     source: 'aliexpress',
-    hero: firstImage(results[results.length - 1]),
+    hero: heroPool[0] || null,
+    heroPool,
     categories: CATEGORIES.map(({ label, keyword }, i) => ({
       label,
       keyword,
-      image: firstImage(results[i]),
+      image: firstImage(categoryResults[i]),
     })),
   });
 }

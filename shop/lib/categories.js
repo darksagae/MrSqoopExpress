@@ -26,5 +26,18 @@ export const CATEGORIES = [
   { label: 'Office',                       keyword: 'office supplies' },
 ];
 
-/** Keyword whose top result is used as the hero image. */
-export const HERO_KEYWORD = 'bluetooth headphones';
+/**
+ * Broad, high-traffic search terms used to pull trending products for the
+ * homepage hero — deliberately not the CATEGORIES list. A category keyword
+ * like "hand tools" always resolves to the same handful of best-sellers, so
+ * a hero built from it repeats itself; these are generic enough that the
+ * best-seller results shift over time and span many kinds of goods.
+ */
+export const HERO_TRENDING_KEYWORDS = [
+  'best seller',
+  'trending gadgets',
+  'new arrival 2025',
+  'hot sale',
+  'top rated',
+  'must have',
+];

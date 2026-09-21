@@ -13,9 +13,10 @@ export default function Home() {
   // Until it lands, tiles and the hero render empty placeholder boxes.
   const [catImages, setCatImages] = useState({});
   const [heroImage, setHeroImage] = useState(null);
-  // One image per category (already fetched for the tiles below) doubles as
-  // a rotation pool for the hero, so it showcases the range of what's sold
-  // rather than sitting on a single fixed product.
+  // Trending/best-selling product images from /api/categories, used to
+  // rotate the hero — deliberately not tied to the fixed category keywords,
+  // so it showcases what's actually popular right now rather than always
+  // the same handful of category representatives.
   const [heroPool, setHeroPool] = useState([]);
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
@@ -43,7 +44,7 @@ export default function Home() {
           if (c.image) byKeyword[c.keyword] = c.image;
         }
         setCatImages(byKeyword);
-        const pool = [d.hero, ...d.categories.map((c) => c.image)].filter(Boolean);
+        const pool = Array.isArray(d.heroPool) ? d.heroPool.filter(Boolean) : [];
         setHeroPool(pool);
         if (pool[0]) setHeroImage(pool[0]);
       })
@@ -51,8 +52,8 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Cycle the hero through one product per category so it showcases the
-  // range of what's sold, rather than a single fixed item forever.
+  // Cycle the hero through trending products so it showcases what's
+  // actually popular on AliExpress, rather than a single fixed item forever.
   useEffect(() => {
     if (heroPool.length < 2) return;
     let i = 0;

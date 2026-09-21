@@ -11,7 +11,8 @@
  * until /api/categories responds.
  */
 export const CATEGORIES = [
-  { label: 'Electronics',                  keyword: 'laptop' },
+  { label: 'Electronics',                  keyword: 'electronic gadgets' },
+  { label: 'Laptops',                      keyword: 'laptop' },
   { label: 'Phones & Tablets',             keyword: 'smartphone' },
   { label: 'Fashion',                      keyword: 'men trousers' },
   { label: 'Home, Furniture & Appliances', keyword: 'furniture chair' },

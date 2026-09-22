@@ -105,7 +105,7 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error + (data.missing?.length ? ` (missing: ${data.missing.join(', ')})` : ''));
+        setError(data.error);
         return;
       }
       // Keep the cart until the money actually lands — if the customer declines

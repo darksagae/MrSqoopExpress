@@ -398,7 +398,78 @@ switch over.
 
 ---
 
-## 9. How this maps onto our codebase
+## 9. How it is wired (implemented)
+
+Built and merged, but **dormant by default**. Nothing changes until
+`PAYMENT_PROVIDER=lipapay` is set — which must wait for a whitelisted static IP,
+or every checkout 403s.
+
+```
+lib/payments/lipapay.js                    provider: requestToPay, getPaymentStatus,
+                                           verifySignature, payStatusToString
+lib/payments/resolve.js                    picks direct MTN/Airtel vs LipaPay
+app/api/webhooks/payments/lipapay/route.js callback handler
+```
+
+`resolve.js` is the switch:
+
+| `PAYMENT_PROVIDER` | Behaviour |
+|---|---|
+| unset / anything else | **Direct `mtn.js` / `airtel.js`** — current production behaviour |
+| `lipapay` | Both networks routed through LipaPay |
+
+### The customer never sees "LipaPay"
+
+They pick **MTN Mobile Money** or **Airtel Money**, the prompt arrives from that
+wallet, and those are the only names the UI uses — the same way a card checkout says
+"Visa", not "Stripe". The labels are truthful either way; only the processor behind them
+changes.
+
+This is enforced, not just intended:
+
+- `NETWORK_LABEL` in `resolve.js` is the single source of customer-facing names.
+- Error paths return generic text. The `missing` array (`LIPAPAY_MCH_ID`, …) and
+  `error.code` (`LIPAPAY_IP_NOT_WHITELISTED`, …) name the processor, so both now stay in
+  server logs instead of the API response.
+- `GET /api/orders` is unauthenticated and previously listed missing env var names —
+  it now returns only `{ ready }` per network.
+- Verified: the string `lipa` appears in **no client-side bundle**.
+
+One thing that *will* be visible: the charge may appear on the customer's MoMo statement
+under LipaPay's merchant name rather than ours. Support should expect
+"who is this charging me?" questions.
+
+### Behaviour notes
+
+- `OutTradeNo` is our `orderId` (`MSE-…`), which is also what `orderquery` takes — so it
+  doubles as the `payment_ref` we persist, and no schema change was needed.
+- Retries after a failure generate a fresh `orderId`, avoiding the `403 duplicate`
+  that resubmitting the same `OutTradeNo` would cause.
+- `TraderFullName` is sent as `NONEEDMATCHNAMES`. Customers routinely type a name that
+  differs from the one registered on their wallet, and matching on it would reject
+  legitimate payments.
+- `Channel` follows the customer's selection (MTN=1 / Airtel=2) rather than auto-detect,
+  so a mismatch fails loudly instead of silently charging the other wallet.
+- The callback handler verifies the signature *and* re-confirms via `orderquery` before
+  settling. Convenient detail: `orderquery` is **not** IP-gated, so callback verification
+  keeps working from Vercel even while `unifiedorder` is blocked.
+
+### Enabling it later
+
+```
+PAYMENT_PROVIDER=lipapay
+LIPAPAY_MCH_ID=1205036
+LIPAPAY_PRIVATE_KEY=<rotated key>
+LIPAPAY_BASE_URL=https://pay.lipapayug.com
+LIPAPAY_NOTIFY_URL=https://www.mrsqoopexpress.com/api/webhooks/payments/lipapay
+```
+
+Give LipaPay the Vercel static IP first, then flip `PAYMENT_PROVIDER`. Roll back by
+unsetting that one variable.
+
+---
+
+## 10. Original interface mapping
 
 Current structure, for reference:
 
@@ -444,7 +515,7 @@ duplicate` — append a retry suffix (`ORD-1001-R2`) rather than resubmitting th
 
 ---
 
-## 10. Checking it from a whitelisted machine
+## 11. Checking it from a whitelisted machine
 
 `scripts/lipapay-check.mjs` exercises the API end to end. Run it from a machine whose IP
 is whitelisted — not from Vercel.
@@ -474,7 +545,7 @@ That places the order, then polls `orderquery` until `PayStatus` resolves. Witho
 
 ---
 
-## 11. Open items before wiring
+## 12. Open items
 
 1. 🔴 **Resolve the IP whitelist** (§7.1) — hard blocker on Vercel's dynamic IPs.
 2. 🔴 **Rotate the private key** — it was shared in plaintext over chat. The vendor's own

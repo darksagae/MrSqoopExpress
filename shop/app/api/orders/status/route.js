@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as mtn from '@/lib/payments/mtn';
-import * as airtel from '@/lib/payments/airtel';
+import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
 import { settlePayment } from '@/lib/orders';
 
 /**
@@ -18,17 +17,16 @@ export async function GET(request) {
   const network = searchParams.get('network');
   const reference = searchParams.get('reference');
 
-  if (!['mtn', 'airtel'].includes(network)) {
+  if (!NETWORKS.includes(network)) {
     return NextResponse.json({ error: 'network must be mtn or airtel' }, { status: 400 });
   }
   if (!reference) {
     return NextResponse.json({ error: 'reference is required' }, { status: 400 });
   }
 
-  const provider = network === 'mtn' ? mtn : airtel;
-  const ready = network === 'mtn' ? mtn.isMtnConfigured() : airtel.isAirtelConfigured();
+  const { provider, ready, label } = resolveProvider(network);
   if (!ready) {
-    return NextResponse.json({ error: `${network} is not connected yet.` }, { status: 503 });
+    return NextResponse.json({ error: `${label} is not connected yet.` }, { status: 503 });
   }
 
   try {

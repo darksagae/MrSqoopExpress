@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import * as mtn from '@/lib/payments/mtn';
-import * as airtel from '@/lib/payments/airtel';
+import { resolveProvider, networkStatus, NETWORKS } from '@/lib/payments/resolve';
 import { createOrder } from '@/lib/orders';
 
 /**
@@ -15,12 +14,7 @@ import { createOrder } from '@/lib/orders';
  */
 export async function GET() {
   // Lightweight status probe so the checkout page can show which networks are live.
-  return NextResponse.json({
-    networks: {
-      mtn: { ready: mtn.isMtnConfigured(), missing: mtn.mtnMissing() },
-      airtel: { ready: airtel.isAirtelConfigured(), missing: airtel.airtelMissing() },
-    },
-  });
+  return NextResponse.json({ networks: networkStatus() });
 }
 
 export async function POST(request) {
@@ -37,7 +31,7 @@ export async function POST(request) {
   if (!customer.name || !customer.phone) {
     return NextResponse.json({ error: 'Your name and mobile-money phone number are required.' }, { status: 400 });
   }
-  if (!['mtn', 'airtel'].includes(network)) {
+  if (!NETWORKS.includes(network)) {
     return NextResponse.json({ error: 'Choose a payment method: MTN Mobile Money or Airtel Money.' }, { status: 400 });
   }
   if (!items.length || !Number(total)) {
@@ -45,18 +39,15 @@ export async function POST(request) {
   }
 
   const orderId = 'MSE-' + Date.now().toString(36).toUpperCase();
-  const provider = network === 'mtn' ? mtn : airtel;
-  const isReady = network === 'mtn' ? mtn.isMtnConfigured() : airtel.isAirtelConfigured();
-  const missing = network === 'mtn' ? mtn.mtnMissing() : airtel.airtelMissing();
+  const { provider, ready, missing, label } = resolveProvider(network);
 
   // Not connected yet — be honest, don't fake a charge.
-  if (!isReady) {
+  if (!ready) {
+    // The variable names identify our payment processor, so they stay in the
+    // logs rather than going back to the browser.
+    console.error(`[PAYMENTS] ${network} not configured. Missing: ${missing.join(', ')}`);
     return NextResponse.json(
-      {
-        error: `${network === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money'} is not connected yet.`,
-        missing,
-        hint: 'Add the merchant API credentials to the environment to enable live payment.',
-      },
+      { error: `${label} is not available right now. Please try the other option or check back shortly.` },
       { status: 503 }
     );
   }
@@ -67,6 +58,9 @@ export async function POST(request) {
       phone: customer.phone,
       orderId,
       note: `MrSqoopExpress ${orderId}`,
+      // Only the aggregated provider needs this — the direct ones already know
+      // which network they are.
+      network,
     });
 
     const reference = result.referenceId || result.transactionId;
@@ -111,9 +105,11 @@ export async function POST(request) {
       message: `Approve the payment prompt on your phone (${customer.phone}) to complete your order.`,
     });
   } catch (error) {
-    console.error('Payment initiation failed:', error);
+    // error.code names the processor (LIPAPAY_*). Keep it server-side; the
+    // customer gets a generic code they could quote to support.
+    console.error('Payment initiation failed:', error.code, error.message);
     return NextResponse.json(
-      { error: 'Could not start the mobile-money payment. Please try again.', code: error.code || 'PAYMENT_ERROR' },
+      { error: 'Could not start the mobile-money payment. Please try again.', code: 'PAYMENT_ERROR' },
       { status: 502 }
     );
   }

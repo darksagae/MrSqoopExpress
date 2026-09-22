@@ -1,0 +1,255 @@
+import crypto from 'crypto';
+
+/**
+ * LipaPay — aggregated MTN Mobile Money + Airtel Money collection.
+ *
+ * One API in front of both wallets, so this single provider replaces the
+ * direct mtn.js / airtel.js integrations when enabled. The customer never
+ * sees the word "LipaPay": they picked MTN or Airtel, the prompt arrives from
+ * MTN or Airtel, and that is what the UI says. LipaPay is the processor in
+ * between, the same way a card checkout says "Visa" rather than "Stripe".
+ *
+ * Credentials come from the LipaPay merchant dashboard (admin.lipapayug.com):
+ *   LIPAPAY_MCH_ID       — merchant ID
+ *   LIPAPAY_PRIVATE_KEY  — signing key. Never sent in a request; used only to
+ *                          compute the MD5 Sign locally.
+ *   LIPAPAY_BASE_URL     — https://pay.lipapayug.com (production)
+ *                          http://dev.pay.lipapayug.com (sandbox; 502 as of writing)
+ *   LIPAPAY_NOTIFY_URL   — absolute URL of our callback endpoint
+ *
+ * See LIPAPAY_API_REFERENCE.md for the full protocol and the verified list of
+ * places the vendor docs are wrong.
+ *
+ * NOTE: LipaPay IP-whitelists its transactional endpoints. Vercel serverless
+ * has dynamic egress IPs, so this will 403 in production until a static IP is
+ * in place — which is why PAYMENT_PROVIDER gates it (see resolve.js).
+ */
+
+const MCH_ID = process.env.LIPAPAY_MCH_ID;
+const PRIVATE_KEY = process.env.LIPAPAY_PRIVATE_KEY;
+const BASE_URL = process.env.LIPAPAY_BASE_URL || 'https://pay.lipapayug.com';
+const NOTIFY_URL = process.env.LIPAPAY_NOTIFY_URL;
+
+/** UGX below this is rejected by the platform. */
+export const MIN_AMOUNT_UGX = 500;
+
+const CHANNEL = { mtn: 1, airtel: 2 };
+
+export function isLipaPayConfigured() {
+  return Boolean(MCH_ID && PRIVATE_KEY && NOTIFY_URL);
+}
+
+export function lipapayMissing() {
+  const m = [];
+  if (!MCH_ID) m.push('LIPAPAY_MCH_ID');
+  if (!PRIVATE_KEY) m.push('LIPAPAY_PRIVATE_KEY');
+  if (!NOTIFY_URL) m.push('LIPAPAY_NOTIFY_URL');
+  return m;
+}
+
+/**
+ * MD5 signature over the given fields plus the private key.
+ *
+ * `fields` must be insertion-ordered to match the endpoint's parameter table
+ * in the API reference — NOT sorted alphabetically, which is the usual
+ * instinct and produces a 401. Null/empty values are omitted.
+ */
+function sign(fields) {
+  const base = Object.entries(fields)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&');
+  return crypto.createHash('md5').update(`${base}&privateKey=${PRIVATE_KEY}`, 'utf8').digest('hex');
+}
+
+/**
+ * Read a field straight out of the raw response text.
+ *
+ * LipaPay signs the literal decimal it sent ("50000.00"), and JSON.parse
+ * collapses that to a Number whose re-serialisation ("50000") hashes
+ * differently. Signature checks only work against the characters on the wire.
+ */
+function rawField(text, key) {
+  const m = text.match(new RegExp(`"${key}"\\s*:\\s*("[^"]*"|[^,}\\s]+)`));
+  if (!m) return undefined;
+  return m[1].startsWith('"') ? m[1].slice(1, -1) : m[1];
+}
+
+/**
+ * Verify a signed payload (response Data object, or a callback body) against
+ * the fields listed, in order. Returns false on any mismatch.
+ *
+ * Exported because the webhook route needs it: a forged callback is the one
+ * way someone could mark an unpaid order as paid.
+ */
+export function verifySignature(rawText, fieldOrder) {
+  const expected = rawField(rawText, 'Sign');
+  if (!expected) return false;
+  const fields = {};
+  for (const key of fieldOrder) {
+    const v = rawField(rawText, key);
+    if (v !== undefined && v !== '' && v !== 'null') fields[key] = v;
+  }
+  // Length-independent compare is overkill for a hex digest, but costs nothing.
+  const computed = sign(fields);
+  return computed.length === expected.length
+    && crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(expected));
+}
+
+/** Field order of a payment-result payload — used by both orderquery and callbacks. */
+export const RESULT_FIELDS = [
+  'PayStatus',
+  'PayTime',
+  'OutTradeNo',
+  'TransactionId',
+  'Amount',
+  'ActualPaymentAmount',
+  'ActualCollectAmount',
+  'PayerCharge',
+  'PayeeCharge',
+  // PayMessage is deliberately absent: it ships in the payload but is excluded
+  // from the signature. Including it makes every verification fail.
+];
+
+async function call(path, fields) {
+  const res = await fetch(BASE_URL + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...fields, Sign: sign(fields) }),
+  });
+
+  // LipaPay answers HTTP 200 even for hard failures; the real code is in the
+  // body. Never branch on res.ok here.
+  const text = await res.text();
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    const err = new Error(`LipaPay returned non-JSON (${res.status}): ${text.slice(0, 200)}`);
+    err.code = 'LIPAPAY_BAD_RESPONSE';
+    throw err;
+  }
+  return { json, text };
+}
+
+/** Turn LipaPay's polymorphic Errors field into one readable line. */
+function errorText(errors) {
+  if (!errors) return 'Unknown error';
+  if (typeof errors === 'string') return errors;
+  if (Array.isArray(errors)) return errors.join('; ');
+  // Validation failures arrive as { Field: ["message", ...] }, sometimes in Chinese.
+  return Object.entries(errors)
+    .map(([field, msgs]) => `${field}: ${[].concat(msgs).join(', ')}`)
+    .join('; ');
+}
+
+function fail(json, fallbackCode) {
+  const err = new Error(`LipaPay: ${errorText(json.Errors)}`);
+  err.code = json.StatusCode === 403 ? 'LIPAPAY_IP_NOT_WHITELISTED' : fallbackCode;
+  err.statusCode = json.StatusCode;
+  return err;
+}
+
+/**
+ * Push a payment prompt to the customer's phone.
+ *
+ * Asynchronous: a success here means LipaPay accepted the order, not that any
+ * money moved. The customer still has to approve on their handset, and the
+ * outcome arrives via callback (or getPaymentStatus).
+ *
+ * @returns {{ transactionId: string, platformRef: string, status: 'PENDING' }}
+ *          transactionId is our own OutTradeNo — that is the key orderquery
+ *          takes, so it doubles as the payment reference we persist.
+ */
+export async function requestToPay({ amountUGX, phone, orderId, note, network }) {
+  const amount = Math.round(Number(amountUGX));
+
+  if (!Number.isFinite(amount) || amount < MIN_AMOUNT_UGX) {
+    const err = new Error(`LipaPay requires at least ${MIN_AMOUNT_UGX} UGX.`);
+    err.code = 'LIPAPAY_AMOUNT_TOO_LOW';
+    throw err;
+  }
+
+  const { json } = await call('/api/pay/unifiedorder', {
+    Version: 'v1.0',
+    MchID: Number(MCH_ID),
+    TimeStamp: Math.floor(Date.now() / 1000),
+    // Honour the network the customer picked rather than auto-detecting, so a
+    // mismatch fails loudly instead of silently charging the other wallet.
+    Channel: CHANNEL[network] ?? 0,
+    OutTradeNo: orderId,
+    // Amount is in CENTS. 500 UGX is 50000 — sending shillings undercharges
+    // by 100x, sending the wrong way overcharges by 100x.
+    Amount: amount * 100,
+    TransactionType: 1, // collection
+    TraderID: normalizeMsisdn(phone),
+    // Customers routinely type a name that differs from the one registered on
+    // their wallet. Matching on it would reject legitimate payments, so skip it.
+    TraderFullName: 'NONEEDMATCHNAMES',
+    Description: note || `MrSqoopExpress ${orderId}`,
+    NotifyUrl: NOTIFY_URL,
+    // Sign added by call()
+  });
+
+  if (!json.Succeeded) throw fail(json, 'LIPAPAY_REQUEST_FAILED');
+
+  return {
+    transactionId: orderId,
+    platformRef: json.Data?.TransactionId || null,
+    status: 'PENDING',
+  };
+}
+
+/**
+ * Authoritative status for an order.
+ *
+ * @param outTradeNo our order id, as passed to requestToPay
+ * @returns 'SUCCESSFUL' | 'PENDING' | 'FAILED' — the vocabulary the rest of
+ *          the app already speaks (see orders/status route).
+ */
+export async function getPaymentStatus(outTradeNo) {
+  const { json, text } = await call('/api/pay/orderquery', {
+    Version: 'v1.0',
+    MchID: Number(MCH_ID),
+    TimeStamp: Math.floor(Date.now() / 1000),
+    OutTradeNo: outTradeNo,
+  });
+
+  if (!json.Succeeded) {
+    // An order we submitted moments ago may not be queryable yet. Documented
+    // as 404 but actually 400 "OutTradeNo does not exist!" — treat either as
+    // still-pending rather than a failure, or we would mark a live payment dead.
+    const msg = errorText(json.Errors);
+    if (json.StatusCode === 404 || /does not exist/i.test(msg)) return 'PENDING';
+    throw fail(json, 'LIPAPAY_STATUS_FAILED');
+  }
+
+  if (!verifySignature(text, RESULT_FIELDS)) {
+    const err = new Error('LipaPay order status failed signature verification.');
+    err.code = 'LIPAPAY_BAD_SIGNATURE';
+    throw err;
+  }
+
+  return payStatusToString(json.Data?.PayStatus);
+}
+
+/** PayStatus enum → our status vocabulary. */
+export function payStatusToString(payStatus) {
+  switch (Number(payStatus)) {
+    case 1: return 'SUCCESSFUL';
+    case 2: return 'FAILED';
+    case 0: return 'PENDING';
+    default: return 'UNKNOWN';
+  }
+}
+
+/**
+ * Local 10-digit form with leading zero (0750000000), which is what the
+ * platform's examples use. Accepts +256…/256… and normalises back down.
+ */
+function normalizeMsisdn(phone) {
+  const p = String(phone).replace(/[^0-9]/g, '');
+  if (p.startsWith('256')) return '0' + p.slice(3);
+  if (!p.startsWith('0')) return '0' + p;
+  return p;
+}

@@ -27,9 +27,6 @@ export default function SiteHeader() {
           <span className="logo-sub">YOU SHOP. WE SHIP. YOU SMILE.</span>
         </Link>
         <div className="nav-right">
-          <Link href="/#shop" className="icon-btn" aria-label="Search">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" /></svg>
-          </Link>
           <button className="icon-btn cart-btn" onClick={() => setOpen(true)} aria-label="Open cart">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 7h12l-1 13H7L6 7z" /><path d="M9 7a3 3 0 0 1 6 0" /></svg>
             {count > 0 && <span className="cart-count">{count}</span>}

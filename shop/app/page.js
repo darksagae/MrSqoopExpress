@@ -138,6 +138,19 @@ export default function Home() {
 
   return (
     <>
+      {/* ===== Top search bar ===== */}
+      <div className="top-search">
+        <form className="shop-search" onSubmit={submitSearch}>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="Search any product…"
+          />
+          <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
+        </form>
+      </div>
+
       {/* ===== Hero ===== */}
       <section className="hero">
         <div className="hero-inner">
@@ -219,16 +232,6 @@ export default function Home() {
           <div className="shop-head">
             <h2 className="section-title">{query ? `Results for “${query}”` : 'Trending Products'}</h2>
           </div>
-
-          <form className="shop-search" onSubmit={submitSearch}>
-            <input
-              type="text"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              placeholder="Search any product…"
-            />
-            <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
-          </form>
 
           {loading && <p className="shop-status">Loading products…</p>}
 

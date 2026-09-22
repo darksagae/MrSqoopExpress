@@ -271,6 +271,16 @@ Observed scope:
 | `/api/pay/bill` | ❌ **403 — whitelist required** |
 | `/api/pay/unifiedorder` | ❓ untested (can't test without moving money) — **assume whitelisted** |
 
+**How unstable are dynamic IPs in practice?** Across a handful of consecutive calls from
+one sandboxed environment, LipaPay reported four different source addresses:
+
+```
+160.79.106.129  →  160.79.106.131  →  136.111.196.80  →  34.56.134.135
+```
+
+Not even the /16 held. Vercel serverless behaves the same way — whitelisting is simply
+incompatible with it.
+
 **Why this is a problem for us:** the shop runs on Vercel serverless functions, which have
 **dynamic egress IPs**. There is no fixed address to whitelist. Options:
 
@@ -341,7 +351,27 @@ Doc says both are optional and default to today. They are **mandatory**:
 
 With both supplied it returns `200` / `{"Items":[]}`.
 
-### 7.8 Field order in the signature is load-bearing
+### 7.8 `JSON.parse()` breaks response-signature verification
+
+LipaPay signs the **literal decimal text it sent**, not the numeric value. The balance
+response carries `"Balance":0.000000`, and only that exact string hashes to the `Sign`
+it ships with:
+
+| String signed | MD5 |
+|---|---|
+| `Balance=0.000000&privateKey=…` | `23c6f7b9…` ✅ matches |
+| `Balance=0.00&privateKey=…` | `b5e1dfc6…` ✗ |
+| `Balance=0&privateKey=…` | `330c50d6…` ✗ |
+
+`JSON.parse()` turns `0.000000` into the number `0`, which re-serializes as `"0"` — so
+verification always fails if you rebuild the string from parsed values. Extract the raw
+token from the response **text** instead. `scripts/lipapay-check.mjs` has a `rawField()`
+helper that does this.
+
+Same trap applies to callbacks, where a false mismatch would mean rejecting a genuine
+payment notification.
+
+### 7.9 Field order in the signature is load-bearing
 
 Sorting alphabetically — the instinct for most signing schemes — produces a wrong hash and
 a 401. Order must follow the endpoint's parameter table. Keep signing objects as ordered
@@ -414,7 +444,37 @@ duplicate` — append a retry suffix (`ORD-1001-R2`) rather than resubmitting th
 
 ---
 
-## 10. Open items before wiring
+## 10. Checking it from a whitelisted machine
+
+`scripts/lipapay-check.mjs` exercises the API end to end. Run it from a machine whose IP
+is whitelisted — not from Vercel.
+
+```bash
+export LIPAPAY_MCH_ID=1205036
+export LIPAPAY_PRIVATE_KEY=<your key>
+
+# Read-only: balance + statement. Works from any IP.
+node scripts/lipapay-check.mjs
+
+# Adds the IP-gated name/fee lookup — the real whitelist test.
+node scripts/lipapay-check.mjs --phone 07XXXXXXXX
+```
+
+It verifies response signatures, and on a 403 prints the address **LipaPay itself saw** —
+more reliable than an IP echo service, which reports something different behind a proxy.
+
+A real 500 UGX collection needs two explicit flags, since there is no sandbox:
+
+```bash
+node scripts/lipapay-check.mjs --phone 07XXXXXXXX --charge --confirm
+```
+
+That places the order, then polls `orderquery` until `PayStatus` resolves. Without
+`--confirm` it explains what would happen and exits.
+
+---
+
+## 11. Open items before wiring
 
 1. 🔴 **Resolve the IP whitelist** (§7.1) — hard blocker on Vercel's dynamic IPs.
 2. 🔴 **Rotate the private key** — it was shared in plaintext over chat. The vendor's own

@@ -9,9 +9,9 @@ export default function PrivacyPolicy() {
       <p className="legal-updated">Last updated: {new Date().getFullYear()}</p>
 
       <p>
-        MrSqoopExpress (&quot;we&quot;, &quot;us&quot;) sources products from AliExpress and
-        delivers them to customers in Uganda. This policy explains what information we
-        collect when you shop with us, and how it is used.
+        MrSqoopExpress (&quot;we&quot;, &quot;us&quot;) sources products from trusted overseas
+        suppliers and delivers them to customers in Uganda. This policy explains what
+        information we collect when you shop with us, and how it is used.
       </p>
 
       <h2>Information we collect</h2>
@@ -31,8 +31,8 @@ export default function PrivacyPolicy() {
 
       <h2>Who we share it with</h2>
       <p>
-        Your delivery details are shared with AliExpress sellers and couriers only as far
-        as needed to fulfil and ship your order. Your mobile money number is shared with
+        Your delivery details are shared with our overseas suppliers and couriers only as
+        far as needed to fulfil and ship your order. Your mobile money number is shared with
         MTN or Airtel solely to process the payment you initiate. We do not sell your
         personal information to third parties.
       </p>

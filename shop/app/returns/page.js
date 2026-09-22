@@ -9,9 +9,9 @@ export default function ReturnPolicy() {
       <p className="legal-updated">Last updated: {new Date().getFullYear()}</p>
 
       <p>
-        Every order is sourced from AliExpress and shipped to Uganda, so returns work a
-        little differently from a local shop. This page explains what&apos;s covered and how
-        to request a refund or replacement.
+        Every order is sourced from our overseas suppliers and shipped to Uganda, so
+        returns work a little differently from a local shop. This page explains
+        what&apos;s covered and how to request a refund or replacement.
       </p>
 
       <h2>Cancelling before it ships</h2>

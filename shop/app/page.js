@@ -9,7 +9,7 @@ const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
 
 export default function Home() {
-  // Real AliExpress product imagery, fetched once from /api/categories.
+  // Real supplier product imagery, fetched once from /api/categories.
   // Until it lands, tiles and the hero render empty placeholder boxes.
   const [catImages, setCatImages] = useState({});
   const [heroImage, setHeroImage] = useState(null);
@@ -22,7 +22,7 @@ export default function Home() {
   const [query, setQuery] = useState('wireless earbuds');
   const [products, setProducts] = useState([]);
   const [page, setPage] = useState(1);
-  // Set once we get back fewer than PAGE_SIZE results — AliExpress has more
+  // Set once we get back fewer than PAGE_SIZE results — the catalog has more
   // pages than that on almost any keyword, so a short page means "last page",
   // not "that's all there is".
   const [hasMore, setHasMore] = useState(true);
@@ -52,8 +52,20 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Preload every image in the rotation pool as soon as it arrives. Without
+  // this, each rotation swaps to a URL the browser has never fetched, so the
+  // remounted <img> sits blank while it loads — a visible flicker — before
+  // the fade-in animation even starts. Preloaded, the bytes are already in
+  // cache by the time the swap happens, so it paints instantly and just fades.
+  useEffect(() => {
+    heroPool.forEach((src) => {
+      const img = new window.Image();
+      img.src = src;
+    });
+  }, [heroPool]);
+
   // Cycle the hero through trending products so it showcases what's
-  // actually popular on AliExpress, rather than a single fixed item forever.
+  // actually popular right now, rather than a single fixed item forever.
   useEffect(() => {
     if (heroPool.length < 2) return;
     let i = 0;

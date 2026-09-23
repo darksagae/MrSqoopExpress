@@ -175,6 +175,28 @@ export default function Home() {
           )}
         </div>
       </section>
+
+      {/* ===== Categories ===== */}
+      <section className="section cat-section" id="categories">
+        <h2 className="section-title">Browse by Category</h2>
+        <div className="cat-strip">
+          {CATEGORIES.map((cat) => (
+            <button
+              type="button"
+              key={cat.label}
+              className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
+              onClick={() => pickCategory(cat)}
+            >
+              <span className={`cat-tile-img${catImages[cat.keyword] ? '' : ' is-empty'}`}>
+                {catImages[cat.keyword] && (
+                  <img src={catImages[cat.keyword]} alt="" aria-hidden="true" />
+                )}
+              </span>
+              <span className="cat-tile-label">{cat.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
     </>
   );
 }

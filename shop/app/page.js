@@ -121,10 +121,6 @@ export default function Home() {
       {/* ===== Products ===== */}
       <section className="section section-space" id="shop">
         <div className="space-inner">
-          <div className="shop-head">
-            <h2 className="section-title">{query ? `Results for “${query}”` : 'Trending Products'}</h2>
-          </div>
-
           {loading && <p className="shop-status">Loading products…</p>}
 
           {error && !loading && (

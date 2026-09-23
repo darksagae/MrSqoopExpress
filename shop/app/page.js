@@ -10,14 +10,8 @@ const PAGE_SIZE = 20;
 
 export default function Home() {
   // Real supplier product imagery, fetched once from /api/categories.
-  // Until it lands, tiles and the hero render empty placeholder boxes.
+  // Until it lands, tiles render empty placeholder boxes.
   const [catImages, setCatImages] = useState({});
-  const [heroImage, setHeroImage] = useState(null);
-  // Trending/best-selling product images from /api/categories, used to
-  // rotate the hero — deliberately not tied to the fixed category keywords,
-  // so it showcases what's actually popular right now rather than always
-  // the same handful of category representatives.
-  const [heroPool, setHeroPool] = useState([]);
   const [keyword, setKeyword] = useState('wireless earbuds');
   const [query, setQuery] = useState('wireless earbuds');
   const [products, setProducts] = useState([]);
@@ -44,37 +38,10 @@ export default function Home() {
           if (c.image) byKeyword[c.keyword] = c.image;
         }
         setCatImages(byKeyword);
-        const pool = Array.isArray(d.heroPool) ? d.heroPool.filter(Boolean) : [];
-        setHeroPool(pool);
-        if (pool[0]) setHeroImage(pool[0]);
       })
       .catch(() => {/* placeholders stay in place */});
     return () => { cancelled = true; };
   }, []);
-
-  // Preload every image in the rotation pool as soon as it arrives. Without
-  // this, each rotation swaps to a URL the browser has never fetched, so the
-  // remounted <img> sits blank while it loads — a visible flicker — before
-  // the fade-in animation even starts. Preloaded, the bytes are already in
-  // cache by the time the swap happens, so it paints instantly and just fades.
-  useEffect(() => {
-    heroPool.forEach((src) => {
-      const img = new window.Image();
-      img.src = src;
-    });
-  }, [heroPool]);
-
-  // Cycle the hero through trending products so it showcases what's
-  // actually popular right now, rather than a single fixed item forever.
-  useEffect(() => {
-    if (heroPool.length < 2) return;
-    let i = 0;
-    const id = setInterval(() => {
-      i = (i + 1) % heroPool.length;
-      setHeroImage(heroPool[i]);
-    }, 4000);
-    return () => clearInterval(id);
-  }, [heroPool]);
 
   // New search term: reset to page 1 and replace the list.
   useEffect(() => {
@@ -150,59 +117,6 @@ export default function Home() {
           <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
         </form>
       </div>
-
-      {/* ===== Hero ===== */}
-      <section className="hero">
-        <div className="hero-inner">
-          <div className="hero-copy">
-            <p className="hero-eyebrow">Welcome to MrSqoopExpress</p>
-            <h1 className="hero-title">
-              EVERYTHING.<br />DELIVERED.
-            </h1>
-            <p className="hero-script">Quality products, straight to Uganda.</p>
-            <p className="hero-sub">
-              Search millions of products and pay with Mobile Money.
-              We process, ship and deliver to your door.
-            </p>
-
-            <div className="hero-actions">
-              <a href="#shop" className="btn-solid">Shop Now <span aria-hidden="true">→</span></a>
-              <a href="#categories" className="btn-outline">Browse Categories</a>
-            </div>
-
-            <ul className="hero-badges">
-              <li>
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                  <path d="M22 12.5l-7.5-3.2V4a1.5 1.5 0 0 0-3 0v5.3L4 12.5v2l7.5-2.3V18l-2.5 1.7V21l3-1 3 1v-1.3L12.5 18v-5.8L20 14.5v-2z" />
-                </svg>
-                <div><strong>Express Shipping</strong><span>To Uganda within 7-15 business days</span></div>
-              </li>
-              <li>
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                  <path d="M3 12a9 9 0 1 1 3 6.7" /><polyline points="3 20 3 14 9 14" />
-                </svg>
-                <div><strong>Order Tracking</strong><span>Follow every step</span></div>
-              </li>
-              <li>
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-                  <rect x="3" y="10" width="18" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" />
-                </svg>
-                <div><strong>Mobile Money</strong><span>Secure checkout</span></div>
-              </li>
-            </ul>
-          </div>
-
-          <div className="hero-visual">
-            <span className="hero-disc">
-              <em>EXPRESS</em>
-              <strong>SHIPPING</strong>
-            </span>
-            <div className={`hero-float${heroImage ? '' : ' is-empty'}`}>
-              {heroImage && <img key={heroImage} src={heroImage} alt="" aria-hidden="true" />}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ===== Categories ===== */}
       <section className="section cat-section" id="categories">

@@ -105,19 +105,6 @@ export default function Home() {
 
   return (
     <>
-      {/* ===== Top search bar ===== */}
-      <div className="top-search">
-        <form className="shop-search" onSubmit={submitSearch}>
-          <input
-            type="text"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder="Search any product…"
-          />
-          <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
-        </form>
-      </div>
-
       {/* ===== Categories ===== */}
       <section className="section cat-section" id="categories">
         <h2 className="section-title">Browse by Category</h2>
@@ -139,6 +126,19 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      {/* ===== Search bar ===== */}
+      <div className="top-search">
+        <form className="shop-search" onSubmit={submitSearch}>
+          <input
+            type="text"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            placeholder="Search any product…"
+          />
+          <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
+        </form>
+      </div>
 
       {/* ===== Products ===== */}
       <section className="section section-space" id="shop">

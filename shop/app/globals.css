@@ -868,28 +868,12 @@ img { display: block; max-width: 100%; }
   .hero-disc { width: 84px; height: 84px; top: 0; left: 0; }
   .hero-disc em { font-size: 11px; }
 
-  .cat-strip {
-    display: flex;
-    grid-template-columns: none;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-    gap: 14px;
-    padding: 2px 2px 10px;
-    margin: 0 -2px;
-    scrollbar-width: none;
-  }
-  .cat-strip::-webkit-scrollbar { display: none; }
-  .cat-tile {
-    flex: 0 0 96px;
-    scroll-snap-align: start;
-  }
+  .cat-strip { grid-template-columns: repeat(4, 1fr); gap: 12px; }
 }
 
 @media (max-width: 520px) {
   .hero-badges li { flex: 1 0 100%; justify-content: center; }
-  .cat-tile { flex-basis: 84px; }
+  .cat-strip { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* ===== Responsive ===== */

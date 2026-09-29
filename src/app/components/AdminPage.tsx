@@ -15,7 +15,11 @@ import {
   filterOrdersByCategory,
   formatOutstandingBilling,
   formatTimestamp,
+  formatUgx,
   getOrderStats,
+  orderBreakdown,
+  paymentLabel,
+  supplierUrl,
   type OrderFilter,
 } from '../lib/ordersStore'
 import { publicSiteHref } from '../lib/site'
@@ -87,6 +91,8 @@ function filterOrders(orders: Order[], query: string) {
       order.customerName.toLowerCase().includes(term) ||
       order.websiteShippedFrom.toLowerCase().includes(term) ||
       order.phone.toLowerCase().includes(term) ||
+      (order.payment ? paymentLabel(order.payment.method).toLowerCase().includes(term) : false) ||
+      (order.items ?? []).some((item) => item.name.toLowerCase().includes(term)) ||
       (searchDigits.length > 0 && phoneDigits.includes(searchDigits))
     )
   })
@@ -171,6 +177,102 @@ function BillingEditor({
   )
 }
 
+function PaymentAndItems({ order }: { order: Order }) {
+  const items = order.items ?? []
+  const payment = order.payment
+  if (!payment && items.length === 0) return null
+
+  // Computed from the lines themselves rather than from billingUgx, which the
+  // operator can edit later. The storefront charges exactly this sum.
+  const breakdown = orderBreakdown(items)
+
+  return (
+    <div className="mt-3 space-y-3">
+      {payment && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500">
+          <span
+            className="rounded-full px-2.5 py-0.5 text-xs font-bold text-black"
+            style={{ backgroundColor: GOLD }}
+          >
+            PAID
+          </span>
+          <span className="text-neutral-300">{paymentLabel(payment.method)}</span>
+          {payment.paidAt && <span>· {formatTimestamp(payment.paidAt)}</span>}
+          {payment.ref && payment.method !== 'card' && (
+            <span className="break-all text-xs text-neutral-600">Ref {payment.ref}</span>
+          )}
+          {payment.method === 'card' && (
+            <span className="text-xs text-neutral-600">
+              Find it in CyberSource by merchant reference #{order.trackingId}
+            </span>
+          )}
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <details open className="rounded-xl border border-neutral-800 bg-black/40 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-white">
+            Items to order ({items.reduce((n, i) => n + i.qty, 0)})
+          </summary>
+          <ul className="mt-3 space-y-3">
+            {items.map((item, index) => {
+              const url = supplierUrl(item.productId)
+              return (
+                <li key={`${item.productId}-${item.skuId}-${index}`} className="text-sm">
+                  <p className="text-neutral-200">
+                    <span className="font-bold" style={{ color: GOLD }}>
+                      {item.qty} ×
+                    </span>{' '}
+                    {item.name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-neutral-500">
+                    {formatUgx(item.unitUgx)} each
+                    {item.skuId ? ` · option ${item.skuId}` : ''}
+                    {url && (
+                      <>
+                        {' · '}
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                          style={{ color: GOLD }}
+                        >
+                          Open on AliExpress
+                        </a>
+                      </>
+                    )}
+                  </p>
+                </li>
+              )
+            })}
+          </ul>
+          {items.length > 0 && (
+            <dl className="mt-3 space-y-1 border-t border-neutral-800 pt-3 text-xs text-neutral-500">
+              <div className="flex justify-between">
+                <dt>Goods</dt>
+                <dd className="text-neutral-300">{formatUgx(breakdown.goods)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Shipping</dt>
+                <dd className="text-neutral-300">{formatUgx(breakdown.shipping)}</dd>
+              </div>
+              <div className="flex justify-between">
+                <dt>Handling</dt>
+                <dd className="text-neutral-300">{formatUgx(breakdown.handling)}</dd>
+              </div>
+              <div className="flex justify-between font-semibold text-neutral-200">
+                <dt>Paid by customer</dt>
+                <dd>{formatUgx(breakdown.total)}</dd>
+              </div>
+            </dl>
+          )}
+        </details>
+      )}
+    </div>
+  )
+}
+
 function OrderRow({
   order,
   onUpdate,
@@ -204,6 +306,8 @@ function OrderRow({
       <p className="mt-3 text-sm text-neutral-500">
         From <span className="text-neutral-300">{order.websiteShippedFrom}</span>
       </p>
+
+      <PaymentAndItems order={order} />
 
       <div className="mt-4 flex flex-wrap gap-2">
         {canAdvance && (
@@ -472,7 +576,7 @@ export function AdminPage() {
                 type="search"
                 value={orderSearch}
                 onChange={(event) => setOrderSearch(event.target.value)}
-                placeholder="Search by order #, name, phone, or website..."
+                placeholder="Search by order #, name, phone, website, item, or payment..."
                 className="mt-3 w-full rounded-full border border-neutral-700 bg-black px-5 py-3 text-sm text-white placeholder:text-neutral-500 outline-none focus:border-[#E8B923]"
               />
 

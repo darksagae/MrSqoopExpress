@@ -146,6 +146,18 @@ export async function listAwaitingAdmin() {
   `;
 }
 
+/** Orders paid recently, for re-sending to the admin dashboard if a push was missed. */
+export async function listRecentPaid({ sinceHours = 6, limit = 25 } = {}) {
+  const sql = getSql();
+  return sql`
+    SELECT * FROM orders
+     WHERE payment_status = 'SUCCESSFUL'
+       AND paid_at > now() - make_interval(hours => ${sinceHours})
+     ORDER BY paid_at DESC
+     LIMIT ${limit}
+  `;
+}
+
 /**
  * Orders stuck PENDING past a grace period. MTN fires its callback once and
  * never retries, so without a sweep over these an order whose callback was

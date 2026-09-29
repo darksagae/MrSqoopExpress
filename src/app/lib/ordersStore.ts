@@ -1,4 +1,4 @@
-import { TRACKING_STAGES, type Order, type TrackingStepView } from '../types/order'
+import { TRACKING_STAGES, type Order, type OrderItem, type TrackingStepView } from '../types/order'
 
 const KAMPALA_TZ = 'Africa/Kampala'
 
@@ -154,4 +154,28 @@ export function buildOrderDetails(order: Order) {
     { label: 'Contact Detail', value: order.phone },
     { label: 'Outstanding Billing', value: formatOutstandingBilling(order.billingUgx) },
   ]
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  mtn: 'MTN Mobile Money',
+  airtel: 'Airtel Money',
+  card: 'Bank card',
+}
+
+export function paymentLabel(method: string | null | undefined) {
+  return method ? PAYMENT_LABELS[method] ?? method : 'Paid online'
+}
+
+/** Goods, shipping and handling across all lines, as charged to the customer. */
+export function orderBreakdown(items: OrderItem[]) {
+  const sum = (pick: (i: OrderItem) => number) => items.reduce((n, i) => n + i.qty * pick(i), 0)
+  const goods = sum((i) => i.unitUgx)
+  const shipping = sum((i) => i.shipUgx)
+  const handling = sum((i) => i.handlingUgx)
+  return { goods, shipping, handling, total: goods + shipping + handling }
+}
+
+/** Supplier listing for a line, so the operator can open it and buy the right thing. */
+export function supplierUrl(productId: string) {
+  return /^\d+$/.test(productId) ? `https://www.aliexpress.com/item/${productId}.html` : null
 }

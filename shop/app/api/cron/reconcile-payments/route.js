@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { listStalePending, settlePayment } from '@/lib/orders';
+import { listStalePending, listRecentPaid, settlePayment } from '@/lib/orders';
+import { syncOrderToTracking, isTrackingConfigured } from '@/lib/tracking';
 import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
 
 /**
@@ -10,7 +11,9 @@ import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
  * Airtel has no callback wired at all, so without this an order paid by a
  * shopper who closed checkout early would stay pending forever.
  *
- * Card orders are skipped: their outcome arrives on the signed notify URL.
+ * Card orders are skipped for the payment check: their outcome arrives on the
+ * signed notify URL. It also re-sends recently paid orders to the admin
+ * dashboard in case the original push failed.
  */
 export async function GET(request) {
   const secret = process.env.CRON_SECRET;
@@ -41,5 +44,17 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.json({ checked: stale.length, settled: results });
+  // syncOrderToTracking only fires once, when an order first turns paid. If
+  // that single attempt failed (admin down, network blip) the order would never
+  // reach the dashboard, so recent paid orders are re-sent here. The admin
+  // treats a repeated order number as success, which makes this harmless.
+  let resync = null;
+  if (isTrackingConfigured()) {
+    const paid = await listRecentPaid({ sinceHours: 6, limit: 25 });
+    const outcomes = await Promise.all(paid.map((o) => syncOrderToTracking(o)));
+    resync = { checked: paid.length, failed: outcomes.filter((ok) => !ok).length };
+    if (resync.failed) console.error('[RECONCILE] admin sync still failing for', resync.failed, 'order(s)');
+  }
+
+  return NextResponse.json({ checked: stale.length, settled: results, adminSync: resync });
 }

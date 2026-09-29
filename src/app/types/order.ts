@@ -19,6 +19,25 @@ export interface StatusHistoryEntry {
   note?: string
 }
 
+/** One purchased line. Only present on the admin's order list, never on public tracking. */
+export interface OrderItem {
+  productId: string
+  skuId: string | null
+  name: string
+  qty: number
+  unitUgx: number
+  shipUgx: number
+  handlingUgx: number
+}
+
+export type PaymentMethod = 'mtn' | 'airtel' | 'card'
+
+export interface OrderPayment {
+  method: PaymentMethod | null
+  ref: string | null
+  paidAt: string | null
+}
+
 export interface Order {
   id: string
   trackingId: string
@@ -30,6 +49,8 @@ export interface Order {
   statusHistory: StatusHistoryEntry[]
   expectedDelivery?: string
   createdAt: string
+  payment?: OrderPayment | null
+  items?: OrderItem[]
 }
 
 export interface TrackingStepView {

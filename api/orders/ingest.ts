@@ -1,5 +1,32 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createOrder } from '../_lib/orders.js'
+import { createOrder, type OrderItem, type PaymentMethod } from '../_lib/orders.js'
+
+const METHODS: readonly string[] = ['mtn', 'airtel', 'card']
+
+const text = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max)
+const whole = (v: unknown) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : 0)
+
+/** Keep only well-formed lines and bound their size; the caller is trusted but not to be believed blindly. */
+function cleanItems(raw: unknown): OrderItem[] {
+  if (!Array.isArray(raw)) return []
+  return raw.slice(0, 50).map((i) => ({
+    productId: text(i?.productId, 40),
+    skuId: i?.skuId ? text(i.skuId, 40) : null,
+    name: text(i?.name, 200) || 'Item',
+    qty: Math.max(1, whole(i?.qty)),
+    unitUgx: whole(i?.unitUgx),
+    shipUgx: whole(i?.shipUgx),
+    handlingUgx: whole(i?.handlingUgx),
+  }))
+}
+
+function cleanPayment(body: Record<string, unknown>) {
+  const method = METHODS.includes(String(body.paymentMethod)) ? (body.paymentMethod as PaymentMethod) : null
+  const ref = body.paymentRef ? text(body.paymentRef, 100) : null
+  const paid = body.paidAt ? new Date(String(body.paidAt)) : null
+  const paidAt = paid && !Number.isNaN(paid.getTime()) ? paid.toISOString() : null
+  return method || ref || paidAt ? { method, ref, paidAt } : undefined
+}
 
 /**
  * POST /api/orders/ingest
@@ -35,6 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phone: String(phone),
       websiteShippedFrom: String(websiteShippedFrom || 'AliExpress'),
       billingUgx: Number(billingUgx) || 0,
+      payment: cleanPayment(req.body ?? {}),
+      items: cleanItems(req.body?.items),
     })
 
     // Duplicate tracking id → the order already exists; report success so the

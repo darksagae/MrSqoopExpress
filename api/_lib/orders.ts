@@ -7,6 +7,26 @@ export interface StatusHistoryEntry {
   note?: string
 }
 
+/** One purchased line, as the storefront recorded it. */
+export interface OrderItem {
+  productId: string
+  skuId: string | null
+  name: string
+  qty: number
+  unitUgx: number
+  shipUgx: number
+  handlingUgx: number
+}
+
+export type PaymentMethod = 'mtn' | 'airtel' | 'card'
+
+export interface OrderPayment {
+  method: PaymentMethod | null
+  ref: string | null
+  paidAt: string | null
+}
+
+/** What customers see on the public tracking page. Never add payment or item detail here. */
 export interface Order {
   id: string
   trackingId: string
@@ -20,6 +40,12 @@ export interface Order {
   createdAt: string
 }
 
+/** Operator view: the public fields plus how it was paid and what to buy. */
+export interface AdminOrder extends Order {
+  payment: OrderPayment | null
+  items: OrderItem[]
+}
+
 type OrderRow = {
   id: string
   tracking_id: string
@@ -31,6 +57,41 @@ type OrderRow = {
   status_history: StatusHistoryEntry[] | string
   expected_delivery: string | null
   created_at: string | Date
+  payment_method?: string | null
+  payment_ref?: string | null
+  paid_at?: string | Date | null
+  order_items?: OrderItem[] | string | null
+}
+
+const PAYMENT_METHODS: readonly string[] = ['mtn', 'airtel', 'card']
+
+// The storefront's payment and item detail lives in extra columns added after
+// launch. They are created on first use so deploying never depends on someone
+// remembering to run a migration, and if that fails we fall back to the original
+// columns rather than refusing to record a paid order.
+let columnsReady: Promise<boolean> | null = null
+
+function ensureOrderColumns(): Promise<boolean> {
+  if (!columnsReady) {
+    columnsReady = (async () => {
+      try {
+        const sql = getSql()
+        await sql`
+          ALTER TABLE orders
+            ADD COLUMN IF NOT EXISTS payment_method TEXT,
+            ADD COLUMN IF NOT EXISTS payment_ref TEXT,
+            ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS order_items JSONB
+        `
+        return true
+      } catch (error) {
+        console.error('Could not add order payment columns', error)
+        columnsReady = null
+        return false
+      }
+    })()
+  }
+  return columnsReady
 }
 
 function normalizeTrackingId(value: string) {
@@ -63,20 +124,50 @@ function rowToOrder(row: OrderRow): Order {
   }
 }
 
-export async function listOrders() {
+function rowToAdminOrder(row: OrderRow): AdminOrder {
+  const items =
+    typeof row.order_items === 'string'
+      ? (JSON.parse(row.order_items) as OrderItem[])
+      : row.order_items ?? []
+  const method = row.payment_method && PAYMENT_METHODS.includes(row.payment_method)
+    ? (row.payment_method as PaymentMethod)
+    : null
+
+  return {
+    ...rowToOrder(row),
+    payment:
+      method || row.payment_ref || row.paid_at
+        ? {
+            method,
+            ref: row.payment_ref ?? null,
+            paidAt: row.paid_at ? new Date(row.paid_at).toISOString() : null,
+          }
+        : null,
+    items,
+  }
+}
+
+async function listOrderRows() {
+  await ensureOrderColumns()
   const sql = getSql()
   const rows = await sql`
     SELECT *
     FROM orders
     ORDER BY created_at DESC
   `
-  return (rows as OrderRow[]).map(rowToOrder)
+  return rows as OrderRow[]
 }
 
+/** Admin only — includes payment and item detail. */
+export async function listOrders() {
+  return (await listOrderRows()).map(rowToAdminOrder)
+}
+
+/** Public tracking lookup. Maps rows to the public shape so nothing private can leak. */
 export async function findOrderByQuery(query: string) {
   const trackingQuery = query.trim().replace(/^#/, '').replace(/^order\s*/i, '')
   const digits = query.replace(/\D/g, '')
-  const orders = await listOrders()
+  const orders = (await listOrderRows()).map(rowToOrder)
 
   return (
     orders.find((order) => {
@@ -99,6 +190,8 @@ export async function createOrder(input: {
   phone: string
   websiteShippedFrom: string
   billingUgx: number
+  payment?: { method: PaymentMethod | null; ref: string | null; paidAt: string | null }
+  items?: OrderItem[]
 }) {
   const trackingId = normalizeTrackingId(input.trackingId)
   if (!trackingId) {
@@ -116,31 +209,66 @@ export async function createOrder(input: {
   const now = new Date().toISOString()
   const history: StatusHistoryEntry[] = [{ stageIndex: 0, timestamp: now }]
 
-  const rows = await sql`
-    INSERT INTO orders (
-      tracking_id,
-      customer_name,
-      phone,
-      website_shipped_from,
-      billing_ugx,
-      current_stage_index,
-      status_history,
-      created_at
-    )
-    VALUES (
-      ${trackingId},
-      ${input.customerName.trim()},
-      ${input.phone.trim()},
-      ${input.websiteShippedFrom.trim()},
-      ${input.billingUgx},
-      0,
-      ${JSON.stringify(history)}::jsonb,
-      ${now}
-    )
-    RETURNING *
-  `
+  const hasDetail = Boolean(input.payment || input.items?.length)
+  const detailColumns = hasDetail && (await ensureOrderColumns())
 
-  return { order: rowToOrder(rows[0] as OrderRow) }
+  const rows = detailColumns
+    ? await sql`
+        INSERT INTO orders (
+          tracking_id,
+          customer_name,
+          phone,
+          website_shipped_from,
+          billing_ugx,
+          current_stage_index,
+          status_history,
+          created_at,
+          payment_method,
+          payment_ref,
+          paid_at,
+          order_items
+        )
+        VALUES (
+          ${trackingId},
+          ${input.customerName.trim()},
+          ${input.phone.trim()},
+          ${input.websiteShippedFrom.trim()},
+          ${input.billingUgx},
+          0,
+          ${JSON.stringify(history)}::jsonb,
+          ${now},
+          ${input.payment?.method ?? null},
+          ${input.payment?.ref ?? null},
+          ${input.payment?.paidAt ?? null},
+          ${JSON.stringify(input.items ?? [])}::jsonb
+        )
+        RETURNING *
+      `
+    : await sql`
+        INSERT INTO orders (
+          tracking_id,
+          customer_name,
+          phone,
+          website_shipped_from,
+          billing_ugx,
+          current_stage_index,
+          status_history,
+          created_at
+        )
+        VALUES (
+          ${trackingId},
+          ${input.customerName.trim()},
+          ${input.phone.trim()},
+          ${input.websiteShippedFrom.trim()},
+          ${input.billingUgx},
+          0,
+          ${JSON.stringify(history)}::jsonb,
+          ${now}
+        )
+        RETURNING *
+      `
+
+  return { order: rowToAdminOrder(rows[0] as OrderRow) }
 }
 
 export async function advanceOrder(id: string, note?: string) {
@@ -148,7 +276,7 @@ export async function advanceOrder(id: string, note?: string) {
   const rows = await sql`SELECT * FROM orders WHERE id = ${id} LIMIT 1`
   if (rows.length === 0) return null
 
-  const order = rowToOrder(rows[0] as OrderRow)
+  const order = rowToAdminOrder(rows[0] as OrderRow)
   if (order.currentStageIndex >= LAST_STAGE_INDEX) return order
 
   const nextStage = order.currentStageIndex + 1
@@ -167,7 +295,7 @@ export async function advanceOrder(id: string, note?: string) {
     RETURNING *
   `
 
-  return rowToOrder(updated[0] as OrderRow)
+  return rowToAdminOrder(updated[0] as OrderRow)
 }
 
 export async function updateOrderBilling(id: string, billingUgx: number) {
@@ -179,7 +307,7 @@ export async function updateOrderBilling(id: string, billingUgx: number) {
     RETURNING *
   `
   if (rows.length === 0) return null
-  return rowToOrder(rows[0] as OrderRow)
+  return rowToAdminOrder(rows[0] as OrderRow)
 }
 
 export async function deleteOrder(id: string) {

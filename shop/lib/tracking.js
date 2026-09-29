@@ -17,6 +17,26 @@ export function isTrackingConfigured() {
   return Boolean(SECRET);
 }
 
+const num = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)) : 0);
+
+/**
+ * What the operator needs to fulfil the order: one entry per line with the
+ * supplier product and SKU to buy. Older orders saved before shipping and
+ * handling were stored per line simply report zero for those.
+ */
+export function buildIngestItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  return list.slice(0, 50).map((i) => ({
+    productId: String(i.id ?? '').split(':')[0].slice(0, 40),
+    skuId: i.skuId ? String(i.skuId).slice(0, 40) : null,
+    name: String(i.name ?? 'Item').slice(0, 200),
+    qty: Math.max(1, num(i.qty)),
+    unitUgx: num(i.price),
+    shipUgx: num(i.shipUGX),
+    handlingUgx: num(i.handlingUGX),
+  }));
+}
+
 /**
  * Best-effort sync. Never throws — a tracking-sync failure must not roll back a
  * settled payment. Returns true on success so callers can log the outcome.
@@ -41,6 +61,13 @@ export async function syncOrderToTracking(order) {
         phone: order.customer_phone,
         billingUgx: Number(order.amount_ugx) || 0,
         websiteShippedFrom: 'AliExpress',
+        // Payment and item details for the operator's dashboard. The admin
+        // ignores fields it doesn't know, so this is safe to send to an older
+        // deployment.
+        paymentMethod: order.network || null,
+        paymentRef: order.payment_ref || null,
+        paidAt: order.paid_at ? new Date(order.paid_at).toISOString() : null,
+        items: buildIngestItems(order.items),
       }),
       signal: controller.signal,
     });

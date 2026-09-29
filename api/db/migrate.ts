@@ -35,8 +35,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         current_stage_index INTEGER NOT NULL DEFAULT 0,
         status_history JSONB NOT NULL DEFAULT '[]'::jsonb,
         expected_delivery TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        payment_method TEXT,
+        payment_ref TEXT,
+        paid_at TIMESTAMPTZ,
+        order_items JSONB
       )
+    `
+
+    // Existing databases created before these columns
+    await sql`
+      ALTER TABLE orders
+        ADD COLUMN IF NOT EXISTS payment_method TEXT,
+        ADD COLUMN IF NOT EXISTS payment_ref TEXT,
+        ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS order_items JSONB
     `
 
     await sql`CREATE INDEX IF NOT EXISTS idx_orders_tracking_id_lower ON orders (LOWER(tracking_id))`

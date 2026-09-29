@@ -1348,13 +1348,14 @@ img { display: block; max-width: 100%; }
 .co-field span { font-size: 13px; font-weight: 600; color: var(--text-muted); }
 .co-field input { border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text); border-radius: 10px; padding: 12px 14px; font-size: 15px; font-family: inherit; }
 .co-field input:focus { outline: none; border-color: var(--accent); }
-.co-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.co-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .co-method { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--border-strong); background: var(--bg-elevated); color: var(--text); border-radius: 12px; padding: 14px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit; transition: border-color .15s, box-shadow .15s; }
 .co-method:hover { border-color: var(--text-dim); }
 .co-method.active { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,204,0,.15); }
 .co-method-badge { font-size: 11px; font-weight: 800; color: #fff; padding: 4px 7px; border-radius: 6px; letter-spacing: .02em; }
 .co-method-badge.mtn { background: #ffcc00; color: #111; }
 .co-method-badge.airtel { background: #e40000; }
+.co-method-badge.card { background: #1a1f71; color: #fff; }
 .co-note { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin: 6px 0 18px; }
 .co-error { background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin-bottom: 14px; }
 .co-pay { padding: 15px; border-radius: 12px; font-size: 16px; }
@@ -1370,6 +1371,7 @@ img { display: block; max-width: 100%; }
 .co-summary-row.total { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 14px; font-size: 17px; font-weight: 700; color: var(--text); }
 .co-done, .co-empty { max-width: 520px; margin: 0 auto; padding: 80px 20px; text-align: center; color: var(--text); }
 .co-done-check { width: 64px; height: 64px; border-radius: 50%; background: var(--success); color: var(--accent-text); font-size: 34px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; }
+.co-done-check.is-muted { background: var(--bg-elevated-2); color: var(--text); }
 .co-done h1, .co-empty h1 { font-size: 26px; font-weight: 700; margin-bottom: 12px; }
 .co-order-id { font-weight: 700; letter-spacing: .03em; }
 .co-muted { color: var(--text-muted); font-size: 14px; }

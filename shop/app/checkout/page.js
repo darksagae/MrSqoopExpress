@@ -17,6 +17,22 @@ function guessNetwork(phone) {
   return null;
 }
 
+// Hand the browser to the hosted card page with the server-signed fields.
+function postToCardPage(endpoint, fields) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = endpoint;
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
+
 export default function CheckoutPage() {
   const { items, subtotal, shipping, shippingKnown, handling, total, clear } = useCart();
 
@@ -83,7 +99,7 @@ export default function CheckoutPage() {
     e.preventDefault();
     setError(null);
     if (!name.trim() || !phone.trim()) return setError('Please enter your name and phone number.');
-    if (!network) return setError('Please choose MTN Mobile Money or Airtel Money.');
+    if (!network) return setError('Please choose MTN Mobile Money, Airtel Money or Bank Card.');
     // Charging a total that omits an unquoted shipping leg would undercharge the
     // customer now and leave the cost unrecoverable after the money has moved.
     if (!shippingKnown)
@@ -92,6 +108,33 @@ export default function CheckoutPage() {
       );
 
     setSubmitting(true);
+
+    if (network === 'card') {
+      try {
+        const res = await fetch('/api/payments/card', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer: { name: name.trim(), phone: phone.trim() },
+            items,
+            total,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.error);
+          setSubmitting(false);
+          return;
+        }
+        // Leave the button in its busy state while the browser navigates away.
+        postToCardPage(data.endpoint, data.fields);
+      } catch (err) {
+        setError('Network error — please try again. ' + err.message);
+        setSubmitting(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
@@ -208,7 +251,7 @@ export default function CheckoutPage() {
           </label>
 
           <label className="co-field">
-            <span>Mobile money phone number</span>
+            <span>{network === 'card' ? 'Phone number' : 'Mobile money phone number'}</span>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -235,17 +278,28 @@ export default function CheckoutPage() {
               <span className="co-method-badge airtel">Airtel</span>
               <span>Airtel Money</span>
             </button>
+            <button
+              type="button"
+              className={`co-method ${network === 'card' ? 'active' : ''}`}
+              onClick={() => { setNetwork('card'); setTouchedNetwork(true); }}
+            >
+              <span className="co-method-badge card">VISA / MC</span>
+              <span>Bank Card</span>
+            </button>
           </div>
 
           <p className="co-note">
-            When you place the order, a payment prompt is sent to your phone. Approve it with your
-            mobile-money PIN to confirm.
+            {network === 'card'
+              ? 'You’ll be taken to a secure Absa card payment page to enter your card details. We never see or store your card number.'
+              : 'When you place the order, a payment prompt is sent to your phone. Approve it with your mobile-money PIN to confirm.'}
           </p>
 
           {error && <div className="co-error">{error}</div>}
 
           <button className="btn-dark co-pay" disabled={submitting}>
-            {submitting ? 'Sending prompt…' : `Pay ${fmt(total)}`}
+            {submitting
+              ? network === 'card' ? 'Opening card payment…' : 'Sending prompt…'
+              : `Pay ${fmt(total)}`}
           </button>
         </form>
 

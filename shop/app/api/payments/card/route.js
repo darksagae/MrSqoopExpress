@@ -1,0 +1,62 @@
+import { NextResponse } from 'next/server';
+import { buildPaymentRequest, isCardConfigured, cardMissing } from '@/lib/payments/card';
+import { createOrder } from '@/lib/orders';
+
+/**
+ * POST /api/payments/card
+ * Body: { customer: {name, phone}, items: [...], total }
+ *
+ * Records a PENDING card order and returns the signed fields the browser posts
+ * to the hosted card page. Nothing is charged here; the outcome arrives later
+ * at /checkout/card/return.
+ */
+export async function POST(request) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+  }
+
+  const { customer = {}, items = [], total } = body;
+
+  if (!customer.name || !customer.phone) {
+    return NextResponse.json({ error: 'Your name and phone number are required.' }, { status: 400 });
+  }
+  if (!items.length || !Number(total)) {
+    return NextResponse.json({ error: 'Your cart is empty.' }, { status: 400 });
+  }
+
+  if (!isCardConfigured()) {
+    console.error(`[PAYMENTS] card not configured. Missing: ${cardMissing().join(', ')}`);
+    return NextResponse.json(
+      { error: 'Card payments are not available right now. Please pay with mobile money.' },
+      { status: 503 }
+    );
+  }
+
+  const orderId = 'MSE-' + Date.now().toString(36).toUpperCase();
+  const amountUGX = Math.round(Number(total));
+  const { endpoint, fields, transactionUuid } = buildPaymentRequest({ orderId, amountUGX });
+
+  try {
+    await createOrder({
+      orderId,
+      customerName: customer.name,
+      customerPhone: customer.phone,
+      network: 'card',
+      amountUGX,
+      items: items.map((i) => ({ id: i.id, name: i.name, qty: i.qty, price: i.price })),
+      paymentRef: transactionUuid,
+    });
+  } catch (dbError) {
+    // Never send the customer to pay for an order we have no record of.
+    console.error('[CARD ORDER NOT PERSISTED]', orderId, dbError.message);
+    return NextResponse.json(
+      { error: 'Could not start your card payment. Please try again.' },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ orderId, endpoint, fields });
+}

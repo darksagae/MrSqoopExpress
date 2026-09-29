@@ -290,7 +290,7 @@ export default function CheckoutPage() {
 
           <p className="co-note">
             {network === 'card'
-              ? 'You’ll be taken to a secure Absa card payment page to enter your card details. We never see or store your card number.'
+              ? 'Pay with any Visa or Mastercard. You’ll enter your card details on a secure payment page — we never see or store your card number.'
               : 'When you place the order, a payment prompt is sent to your phone. Approve it with your mobile-money PIN to confirm.'}
           </p>
 

@@ -1,0 +1,26 @@
+# Vercel Hobby only allows daily crons, so GitHub calls the payment
+# reconcile endpoint every 10 minutes instead. Needs the repo secret
+# CRON_SECRET set to the same value as CRON_SECRET in the Vercel "shop" project.
+name: Reconcile pending payments
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call reconcile endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Repository secret CRON_SECRET is not set."
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://www.mrsqoopexpress.com/api/cron/reconcile-payments

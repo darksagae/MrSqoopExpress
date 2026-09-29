@@ -149,9 +149,22 @@ export default function Home() {
                     <p className="product-price"><span className="new-price">{fmt(p.priceUGX)}</span></p>
                     <button
                       className="add-cart"
-                      onClick={() => { add({ id: p.id, name: p.title, price: p.priceUGX, img: p.image }); setOpen(true); }}
+                      // Never sell what the supplier won't ship to Uganda.
+                      disabled={p.shipping?.deliverable === false}
+                      onClick={() => {
+                        add({
+                          id: p.id,
+                          name: p.title,
+                          price: p.priceUGX,
+                          img: p.image,
+                          skuId: p.skuId,
+                          shipUGX: p.shipping?.known ? p.shipping.costUGX : null,
+                          handlingUGX: p.handlingUGX,
+                        });
+                        setOpen(true);
+                      }}
                     >
-                      Add to Cart
+                      {p.shipping?.deliverable === false ? 'Unavailable' : 'Add to Cart'}
                     </button>
                   </article>
                 ))}

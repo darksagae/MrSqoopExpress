@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
+import { itemUGX as toUGX, shipUGX } from '@/lib/pricing';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
@@ -7,10 +8,6 @@ import {
   handlingFee,
 } from '@/lib/shipping-destination';
 
-// No markup by default — the listed price is the AliExpress price.
-const MARKUP = parseFloat(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE || '0');
-const RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE || '3700');
-const toUGX = (usd) => Math.round((Number(usd) || 0) * (1 + MARKUP / 100) * RATE);
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 /**
@@ -96,7 +93,7 @@ export async function GET(request, { params }) {
           reason: freight?.reason || null,
           free: Boolean(freight?.freeShipping),
           costUSD: shipUSD == null ? null : round2(shipUSD),
-          costUGX: shipUSD == null ? null : toUGX(shipUSD),
+          costUGX: shipUSD == null ? null : shipUGX(shipUSD),
           company: freight?.company || null,
           minDays: freight?.minDays ?? null,
           maxDays: freight?.maxDays ?? null,

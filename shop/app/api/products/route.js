@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
+import { itemUGX, shipUGX } from '@/lib/pricing';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
@@ -87,7 +88,6 @@ export async function GET(request) {
     const freights = withShipping ? await quoteFreightForAll(products) : products.map(() => null);
 
     const priced = products.map((p, i) => {
-      const itemUSD = p.priceUSD * (1 + MARKUP_PERCENTAGE / 100);
       const f = freights[i];
 
       // null means AliExpress never quoted this route — reported as unknown so
@@ -96,7 +96,7 @@ export async function GET(request) {
       // Refused is a definite "no", not a missing answer.
       const refused = f?.quoted === true && f?.deliverable === false;
 
-      const priceUGX = Math.round(itemUSD * USD_TO_UGX_RATE);
+      const priceUGX = itemUGX(p.priceUSD);
       // Charged on the product price only. Shipping is a pass-through of what
       // AliExpress bills, so taking a percentage of it too would mean the fee
       // moved with the courier rather than with the goods.
@@ -119,7 +119,7 @@ export async function GET(request) {
               reason: f.reason || null,
               free: Boolean(f.freeShipping),
               costUSD: shipUSD == null ? null : round2(shipUSD),
-              costUGX: shipUSD == null ? null : Math.round(shipUSD * USD_TO_UGX_RATE),
+              costUGX: shipUSD == null ? null : shipUGX(shipUSD),
               company: f.company,
               minDays: f.minDays,
               maxDays: f.maxDays,
@@ -130,7 +130,7 @@ export async function GET(request) {
         totalUGX:
           shipUSD == null
             ? null
-            : priceUGX + Math.round(shipUSD * USD_TO_UGX_RATE) + handlingUGX,
+            : priceUGX + shipUGX(shipUSD) + handlingUGX,
         currency: 'UGX',
       };
     });

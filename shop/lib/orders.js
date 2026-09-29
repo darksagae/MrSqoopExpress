@@ -1,5 +1,6 @@
 // Extension is explicit so plain `node` (scripts/db-init.mjs) can resolve this
 // too — Next's bundler is happy either way.
+import crypto from 'crypto';
 import { getSql } from './db.js';
 import { syncOrderToTracking } from './tracking.js';
 
@@ -45,6 +46,11 @@ export async function initSchema() {
   return true;
 }
 
+/** Time-ordered but collision-proof when two checkouts land in the same ms. */
+export function newOrderId() {
+  return 'MSE-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
+}
+
 export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef }) {
   const sql = getSql();
   const rows = await sql`
@@ -54,6 +60,28 @@ export async function createOrder({ orderId, customerName, customerPhone, networ
     RETURNING *
   `;
   return rows[0];
+}
+
+/** Record the provider's reference once the payment request has been accepted. */
+export async function attachPaymentRef(orderId, paymentRef) {
+  const sql = getSql();
+  const rows = await sql`
+    UPDATE orders SET payment_ref = ${paymentRef}, updated_at = now()
+     WHERE id = ${orderId} AND payment_ref IS NULL
+    RETURNING *
+  `;
+  return rows[0] || null;
+}
+
+/** Close an order whose payment request never reached the customer. */
+export async function failUnsentOrder(orderId, reason) {
+  const sql = getSql();
+  await sql`
+    UPDATE orders
+       SET payment_status = 'FAILED', order_status = 'cancelled',
+           failure_reason = ${reason}, updated_at = now()
+     WHERE id = ${orderId} AND payment_status = 'PENDING' AND payment_ref IS NULL
+  `;
 }
 
 export async function getOrder(orderId) {
@@ -123,12 +151,13 @@ export async function listAwaitingAdmin() {
  * never retries, so without a sweep over these an order whose callback was
  * dropped would sit unresolved forever.
  */
-export async function listStalePending({ olderThanMinutes = 5, limit = 50 } = {}) {
+export async function listStalePending({ olderThanMinutes = 5, limit = 50, networks = ['mtn', 'airtel'] } = {}) {
   const sql = getSql();
   return sql`
     SELECT * FROM orders
      WHERE payment_status = 'PENDING'
        AND payment_ref IS NOT NULL
+       AND network = ANY(${networks})
        AND created_at < now() - make_interval(mins => ${olderThanMinutes})
      ORDER BY created_at ASC
      LIMIT ${limit}

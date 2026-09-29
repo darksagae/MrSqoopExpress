@@ -56,6 +56,14 @@ export function CartProvider({ children }) {
 
   const clear = useCallback(() => setItems([]), []);
 
+  // Replace line prices with the server's re-priced figures after checkout
+  // reports a change, keeping any fields the server doesn't send (e.g. image).
+  const reprice = useCallback((lines) => {
+    setItems((prev) =>
+      lines.map((l) => ({ ...prev.find((p) => p.id === l.id), ...l, img: prev.find((p) => p.id === l.id)?.img || l.img }))
+    );
+  }, []);
+
   const count = items.reduce((s, c) => s + c.qty, 0);
   const subtotal = items.reduce((s, c) => s + c.qty * c.price, 0);
 
@@ -75,7 +83,7 @@ export function CartProvider({ children }) {
   return (
     <CartCtx.Provider
       value={{
-        items, add, setQty, clear, count,
+        items, add, setQty, clear, reprice, count,
         subtotal, shipping, shippingKnown, handling, total,
         open, setOpen,
       }}

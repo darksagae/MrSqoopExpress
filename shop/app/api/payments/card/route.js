@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { buildPaymentRequest, isCardConfigured, cardMissing } from '@/lib/payments/card';
-import { createOrder } from '@/lib/orders';
+import { createOrder, newOrderId } from '@/lib/orders';
+import { confirmCartTotal } from '@/lib/pricing';
 
 /**
  * POST /api/payments/card
@@ -35,8 +36,12 @@ export async function POST(request) {
     );
   }
 
-  const orderId = 'MSE-' + Date.now().toString(36).toUpperCase();
-  const amountUGX = Math.round(Number(total));
+  // Charge our own re-priced total, never the browser's.
+  const priced = await confirmCartTotal(items, total);
+  if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
+  const { lines, total: amountUGX } = priced;
+
+  const orderId = newOrderId();
   const { endpoint, fields, transactionUuid } = buildPaymentRequest({ orderId, amountUGX });
 
   try {
@@ -46,7 +51,7 @@ export async function POST(request) {
       customerPhone: customer.phone,
       network: 'card',
       amountUGX,
-      items: items.map((i) => ({ id: i.id, name: i.name, qty: i.qty, price: i.price })),
+      items: lines,
       paymentRef: transactionUuid,
     });
   } catch (dbError) {

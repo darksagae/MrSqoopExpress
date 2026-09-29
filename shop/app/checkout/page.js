@@ -34,7 +34,7 @@ function postToCardPage(endpoint, fields) {
 }
 
 export default function CheckoutPage() {
-  const { items, subtotal, shipping, shippingKnown, handling, total, clear } = useCart();
+  const { items, subtotal, shipping, shippingKnown, handling, total, clear, reprice } = useCart();
 
   const router = useRouter();
 
@@ -122,6 +122,7 @@ export default function CheckoutPage() {
         });
         const data = await res.json();
         if (!res.ok) {
+          if (data.code === 'PRICE_CHANGED' && data.items) reprice(data.items);
           setError(data.error);
           setSubmitting(false);
           return;
@@ -148,6 +149,7 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === 'PRICE_CHANGED' && data.items) reprice(data.items);
         setError(data.error);
         return;
       }

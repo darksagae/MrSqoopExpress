@@ -1,0 +1,56 @@
+import { NextResponse } from 'next/server';
+import { aliexpressDS } from '@/lib/aliexpress';
+import { getTrending } from '@/lib/trending';
+import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
+
+const MAX_LIMIT = 30;
+// Everyone sees the same best sellers, so let the CDN answer most requests:
+// each uncached one costs a ranking lookup plus a freight quote per product.
+const CACHE = 'public, s-maxage=1800, stale-while-revalidate=86400';
+
+/**
+ * GET /api/trending?page=1&limit=20
+ *
+ * The storefront's default listing — what AliExpress ranks as best selling,
+ * priced and shipping-quoted exactly like a search. Anything no seller will
+ * ship to Uganda is left out.
+ */
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20));
+
+  if (!aliexpressDS.hasCredentials()) {
+    return NextResponse.json(
+      { error: 'AliExpress Dropshipping API is not connected yet.' },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+
+  try {
+    // A little extra, because undeliverable products are dropped afterwards.
+    const { source, products } = await getTrending({ page, pageSize: Math.ceil(limit * 1.4) });
+    const freights = await quoteFreightForAll(products);
+    const priced = priceProducts(products, freights)
+      .filter((p) => p.shipping.deliverable !== false)
+      .slice(0, limit);
+
+    if (!priced.length) {
+      return NextResponse.json(
+        { error: 'No trending products are available right now.' },
+        { status: 502, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    return NextResponse.json(
+      { success: true, source, count: priced.length, hasMore: products.length > 0, products: priced },
+      { headers: { 'Cache-Control': CACHE } }
+    );
+  } catch (error) {
+    console.error('Trending fetch failed:', error);
+    return NextResponse.json(
+      { error: 'Could not load trending products.', code: error.code || 'UNKNOWN' },
+      { status: 502, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+}

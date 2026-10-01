@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
-import { itemUGX, shipUGX } from '@/lib/pricing';
+import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
   HANDLING_FEE_PERCENT,
-  handlingFee,
 } from '@/lib/shipping-destination';
 
 // Prices are shown exactly as AliExpress lists them, so there is no markup by
@@ -13,14 +12,6 @@ import {
 // rather than by forgetting to remove one.
 const MARKUP_PERCENTAGE = parseFloat(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE || '0');
 const USD_TO_UGX_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE || '3700');
-
-// AliExpress is asked for one freight quote per product, so the fan-out is
-// capped: enough to keep a page of results fast, not so many that a single
-// search burns through the API rate limit.
-const FREIGHT_CONCURRENCY = 8;
-// A slow freight lookup must not hold up the whole listing. Past this, the
-// product is returned with shipping unknown rather than not returned at all.
-const FREIGHT_TIMEOUT_MS = 6000;
 
 // Filtering removes results, so more are fetched than the caller asked for.
 const OVERFETCH = 1.6;
@@ -87,53 +78,7 @@ export async function GET(request) {
 
     const freights = withShipping ? await quoteFreightForAll(products) : products.map(() => null);
 
-    const priced = products.map((p, i) => {
-      const f = freights[i];
-
-      // null means AliExpress never quoted this route — reported as unknown so
-      // the UI can say "calculated at checkout" instead of implying free.
-      const shipUSD = f?.freeShipping ? 0 : f?.shippingCostUSD ?? null;
-      // Refused is a definite "no", not a missing answer.
-      const refused = f?.quoted === true && f?.deliverable === false;
-
-      const priceUGX = itemUGX(p.priceUSD);
-      // Charged on the product price only. Shipping is a pass-through of what
-      // AliExpress bills, so taking a percentage of it too would mean the fee
-      // moved with the courier rather than with the goods.
-      const handlingUGX = handlingFee(priceUGX);
-
-      return {
-        id: p.id,
-        skuId: p.skuId,
-        title: p.title,
-        image: p.image,
-        url: p.url,
-        // The AliExpress figure itself, untouched.
-        priceUSD: round2(p.priceUSD),
-        priceUGX,
-        handlingUGX,
-        shipping: f
-          ? {
-              known: shipUSD != null,
-              deliverable: !refused,
-              reason: f.reason || null,
-              free: Boolean(f.freeShipping),
-              costUSD: shipUSD == null ? null : round2(shipUSD),
-              costUGX: shipUSD == null ? null : shipUGX(shipUSD),
-              company: f.company,
-              minDays: f.minDays,
-              maxDays: f.maxDays,
-            }
-          : { known: false, deliverable: null, reason: null, free: false, costUSD: null, costUGX: null },
-        // Everything the customer pays: product + shipping + handling. Null
-        // while shipping is unknown rather than understating the total.
-        totalUGX:
-          shipUSD == null
-            ? null
-            : priceUGX + shipUGX(shipUSD) + handlingUGX,
-        currency: 'UGX',
-      };
-    });
+    const priced = priceProducts(products, freights);
 
     // Only a definite refusal from AliExpress removes a product. An unknown
     // quote means the lookup failed, not that the seller won't ship — dropping
@@ -177,42 +122,3 @@ export async function GET(request) {
     );
   }
 }
-
-/**
- * One freight quote per product, run in bounded batches.
- *
- * Every failure mode here degrades to null rather than throwing: a product with
- * an unknown shipping cost is still worth showing, but a listing that 502s
- * because one freight lookup timed out is not.
- */
-async function quoteFreightForAll(products) {
-  const results = new Array(products.length).fill(null);
-
-  for (let start = 0; start < products.length; start += FREIGHT_CONCURRENCY) {
-    const batch = products.slice(start, start + FREIGHT_CONCURRENCY);
-    await Promise.all(
-      batch.map(async (p, j) => {
-        if (!p.skuId || !p.id) return; // no SKU, nothing to quote against
-        try {
-          results[start + j] = await withTimeout(
-            aliexpressDS.queryFreight({ productId: p.id, skuId: p.skuId }),
-            FREIGHT_TIMEOUT_MS
-          );
-        } catch (e) {
-          console.warn(`Freight quote failed for ${p.id}:`, e.message);
-        }
-      })
-    );
-  }
-
-  return results;
-}
-
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('freight quote timed out')), ms)),
-  ]);
-}
-
-const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;

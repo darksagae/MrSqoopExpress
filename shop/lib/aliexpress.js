@@ -270,6 +270,42 @@ export class AliExpressDS {
     return (Array.isArray(list) ? list : []).map(normalizeProduct);
   }
 
+  /**
+   * Names of the curated product feeds this app can read (e.g. best sellers).
+   * The set differs per merchant account, so it is discovered rather than assumed.
+   */
+  async getFeedNames() {
+    const resp = await this.call('aliexpress.ds.feedname.get', {});
+    return deepCollect(resp, (o) => o.promo_name || o.feed_name)
+      .map((o) => String(o.promo_name || o.feed_name))
+      .filter((n, i, all) => all.indexOf(n) === i);
+  }
+
+  /** Products from one of AliExpress's own curated feeds, already ranked by AliExpress. */
+  async recommendFeed({
+    feedName,
+    page = 1,
+    pageSize = 20,
+    country = CUSTOMER_DESTINATION.countryCode,
+    currency = 'USD',
+    language = 'en',
+    categoryId,
+    sort,
+  }) {
+    const resp = await this.call('aliexpress.ds.recommend.feed.get', {
+      feed_name: feedName,
+      page_no: page,
+      page_size: pageSize,
+      country,
+      ship_to_country: country,
+      target_currency: currency,
+      target_language: language,
+      ...(categoryId ? { category_id: categoryId } : {}),
+      ...(sort ? { sort } : {}),
+    });
+    return deepCollect(resp, (o) => o.product_id || o.itemId).map(normalizeProduct);
+  }
+
   /** Full product detail by id — returns a normalized detail object. */
   async getProduct({ productId, countryCode = CUSTOMER_DESTINATION.countryCode, currency = 'USD', locale = 'en' }) {
     const resp = await this.call('aliexpress.ds.product.get', {
@@ -458,6 +494,34 @@ function normalizeProduct(p) {
   const skuId = extractSkuId(p);
   let url = p.itemUrl ?? p.product_detail_url ?? p.promotion_link ?? null;
   if (url && url.startsWith('//')) url = `https:${url}`;
+
+  // Display-only extras. None of these affect what is charged; they only dress
+  // the listing, so every one of them is allowed to be missing.
+  const originalUSD = parseFloat(
+    p.targetOriginalPrice ?? p.target_original_price ?? p.originalPrice ?? p.original_price ?? 0
+  );
+  const explicitDiscount = parseFloat(String(p.discount ?? p.discountRate ?? '').replace('%', ''));
+  const derivedDiscount =
+    originalUSD > priceUSD && priceUSD > 0 ? Math.round((1 - priceUSD / originalUSD) * 100) : 0;
+  const discountPct = Number.isFinite(explicitDiscount) && explicitDiscount > 0 && explicitDiscount < 100
+    ? Math.round(explicitDiscount)
+    : derivedDiscount;
+
+  const score = parseFloat(p.score ?? p.evaluateScore ?? '');
+  const ratePct = parseFloat(String(p.evaluateRate ?? p.evaluate_rate ?? '').replace('%', ''));
+  const rating =
+    Number.isFinite(score) && score > 0 && score <= 5
+      ? Math.round(score * 10) / 10
+      : Number.isFinite(ratePct) && ratePct > 0 && ratePct <= 100
+        ? Math.round((ratePct / 20) * 10) / 10
+        : null;
+
+  const soldRaw = String(p.orders ?? p.lastest_volume ?? p.latest_volume ?? p.sales ?? '').replace(/,/g, '');
+  const soldNum = parseFloat(soldRaw);
+  const sold = Number.isFinite(soldNum) && soldNum > 0
+    ? Math.round(/k$/i.test(soldRaw) ? soldNum * 1000 : soldNum)
+    : null;
+
   return {
     id,
     skuId,
@@ -466,7 +530,22 @@ function normalizeProduct(p) {
     image: p.itemMainPic ?? p.product_main_image_url ?? p.image_url ?? null,
     url: url ?? (id ? `https://www.aliexpress.com/item/${id}.html` : null),
     currency: p.targetOriginalPriceCurrency ?? 'USD',
+    originalUSD: Number.isFinite(originalUSD) && originalUSD > priceUSD ? originalUSD : null,
+    discountPct: discountPct > 0 ? discountPct : null,
+    rating,
+    sold,
   };
+}
+
+/** Every object anywhere in a response that satisfies the test, outermost first. */
+function deepCollect(node, test, out = []) {
+  if (Array.isArray(node)) {
+    node.forEach((n) => deepCollect(n, test, out));
+  } else if (node && typeof node === 'object') {
+    if (test(node)) out.push(node);
+    else Object.values(node).forEach((v) => deepCollect(v, test, out));
+  }
+  return out;
 }
 
 /**

@@ -35,6 +35,13 @@ export async function GET(request) {
       .filter((p) => p.shipping.deliverable !== false)
       .slice(0, limit);
 
+    // Past the end of the list is just an empty page; only an empty first page is a failure.
+    if (!priced.length && page > 1) {
+      return NextResponse.json(
+        { success: true, source, count: 0, hasMore: false, products: [] },
+        { headers: { 'Cache-Control': CACHE } }
+      );
+    }
     if (!priced.length) {
       return NextResponse.json(
         { error: 'No trending products are available right now.' },

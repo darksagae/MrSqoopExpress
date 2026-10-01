@@ -17,7 +17,6 @@ const FEED_NAMES_TTL_MS = 6 * 60 * 60 * 1000;
 const FEED_RETRY_AFTER_MS = 60 * 60 * 1000;
 // Best sellers first, then anything that signals popularity.
 const FEED_PREFERENCE = [/best.?sell/i, /hot/i, /top/i, /popular|trend|recommend/i];
-const MIN_FEED_RESULTS = 4;
 
 // AliExpress's own best-seller lists for mainstream shopping categories, mixed
 // so the home page shows a spread of what sells rather than one niche. Matched
@@ -34,8 +33,20 @@ const PREFERRED_FEEDS = [
   /^phones&accessories_ZA topsellers/i,
   /^home appliances_ZA topsellers/i,
 ];
-// Below this a product is poorly reviewed whatever its sales; unrated is kept.
-const MIN_RATING = 4;
+// The feeds are curated lists, not ordered by popularity, so the best sellers
+// are picked out of them by units sold. Poorly reviewed or barely selling items
+// don't qualify; a missing figure is not held against an item, it just ranks last.
+const MIN_RATING = 4.4;
+const MIN_SOLD = 50;
+const FEED_FETCH_SIZE = 50;
+const PER_FEED_KEPT = 30;
+const POOL_TTL_MS = 20 * 60 * 1000;
+const MIN_POOL = 8;
+
+let pool = { at: 0, items: [], feeds: 0 };
+
+const qualifies = (p) =>
+  !(p.rating != null && p.rating < MIN_RATING) && !(p.sold != null && p.sold < MIN_SOLD);
 
 let feedNames = { at: 0, names: [] };
 let feedUnavailableUntil = 0;
@@ -68,28 +79,52 @@ export function chooseFeeds(names, override = process.env.TRENDING_FEEDS) {
   return mix.length >= 2 ? mix : rankFeeds(names).slice(0, 2);
 }
 
+/**
+ * The ranked pool of best sellers: for each category feed take the items that
+ * qualify, order them by units sold, then interleave the feeds so every page is
+ * a spread of categories rather than one feed's whole run. Built once and
+ * reused, since every page of every visitor reads from it.
+ */
+async function buildPool() {
+  if (pool.items.length && Date.now() - pool.at < POOL_TTL_MS) return pool;
+
+  const names = await discoverFeeds();
+  const feeds = chooseFeeds(names);
+  if (!feeds.length) return null;
+
+  const lists = await Promise.all(
+    feeds.map((feedName) =>
+      aliexpressDS
+        .recommendFeed({ feedName, page: 1, pageSize: FEED_FETCH_SIZE })
+        .then((l) =>
+          l
+            .filter(qualifies)
+            .sort((a, b) => (b.sold ?? 0) - (a.sold ?? 0))
+            .slice(0, PER_FEED_KEPT)
+        )
+        .catch((e) => {
+          console.warn(`[trending] feed "${feedName}" failed:`, e.message);
+          return [];
+        })
+    )
+  );
+
+  const items = interleave(lists, Infinity);
+  if (items.length < MIN_POOL) {
+    console.warn('[trending] feeds gave too few qualifying products:', items.length, JSON.stringify(feeds));
+    return null;
+  }
+  pool = { at: Date.now(), items, feeds: feeds.length };
+  return pool;
+}
+
 async function fromFeed({ page, pageSize }) {
   if (Date.now() < feedUnavailableUntil) return null;
   try {
-    const names = await discoverFeeds();
-    const feeds = chooseFeeds(names);
-    if (!feeds.length) return null;
-
-    const perFeed = Math.max(4, Math.ceil(pageSize / feeds.length) + 2);
-    const lists = await Promise.all(
-      feeds.map((feedName) =>
-        aliexpressDS
-          .recommendFeed({ feedName, page, pageSize: perFeed })
-          .then((l) => l.filter((p) => !(p.rating && p.rating < MIN_RATING)))
-          .catch((e) => {
-            console.warn(`[trending] feed "${feedName}" failed:`, e.message);
-            return [];
-          })
-      )
-    );
-    const products = interleave(lists, pageSize);
-    if (products.length >= MIN_FEED_RESULTS) return { source: `feeds:${feeds.length}`, products };
-    console.warn('[trending] feeds returned too little:', JSON.stringify(feeds));
+    const ready = await buildPool();
+    if (!ready) return null;
+    const from = (page - 1) * pageSize;
+    return { source: `feeds:${ready.feeds}`, products: ready.items.slice(from, from + pageSize) };
   } catch (e) {
     // Most likely the account lacks access to feeds. Don't hammer a method
     // that will keep failing — fall back and look again later.

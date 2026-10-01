@@ -94,7 +94,53 @@ async function fromCategories({ page, pageSize }) {
   return { source: 'categories', products: interleave(lists, pageSize) };
 }
 
+const SKU_LOOKUP_CONCURRENCY = 6;
+
+/**
+ * Feed items arrive without a SKU, and without one there is no shipping quote
+ * and nothing specific to put in a cart. Look up the cheapest option in stock
+ * and price the listing at that option, so the price shown, the shipping quoted
+ * and the item added to the cart are all the same thing.
+ */
+export async function attachSkus(products) {
+  const out = [...products];
+  const todo = out.map((p, i) => [p, i]).filter(([p]) => !p.skuId);
+
+  for (let start = 0; start < todo.length; start += SKU_LOOKUP_CONCURRENCY) {
+    await Promise.all(
+      todo.slice(start, start + SKU_LOOKUP_CONCURRENCY).map(async ([p, i]) => {
+        try {
+          const d = await aliexpressDS.getProduct({ productId: p.id });
+          // Unknown stock counts as available, matching what checkout allows.
+          const inStock = (v) => v.stock == null || v.stock === '' || Number(v.stock) > 0;
+          const options = d.variants.filter((v) => v.skuId && v.priceUSD > 0 && inStock(v));
+          const best = options.sort((a, b) => a.priceUSD - b.priceUSD)[0];
+          if (!best) {
+            out[i] = null; // nothing purchasable
+            return;
+          }
+          const original = p.originalUSD && p.originalUSD > best.priceUSD ? p.originalUSD : null;
+          out[i] = {
+            ...p,
+            skuId: best.skuId,
+            priceUSD: best.priceUSD,
+            originalUSD: original,
+            discountPct: original ? Math.round((1 - best.priceUSD / original) * 100) : null,
+          };
+        } catch (e) {
+          console.warn(`[trending] could not resolve an option for ${p.id}:`, e.message);
+        }
+      })
+    );
+  }
+  return out.filter(Boolean);
+}
+
 /** @returns {Promise<{ source: string, products: object[] }>} */
 export async function getTrending({ page = 1, pageSize = 20 } = {}) {
-  return (await fromFeed({ page, pageSize })) || (await fromCategories({ page, pageSize }));
+  const found = (await fromFeed({ page, pageSize })) || (await fromCategories({ page, pageSize }));
+  return { ...found, products: await attachSkus(found.products) };
 }
+
+/** Names of the feeds this account can read. */
+export const listFeeds = () => discoverFeeds();

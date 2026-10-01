@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
-import { getTrending } from '@/lib/trending';
+import { getTrending, listFeeds } from '@/lib/trending';
 import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
 
 const MAX_LIMIT = 30;
@@ -19,6 +19,11 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
   const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20));
+
+  // TEMPORARY: lists the feeds on offer so the best one can be chosen.
+  if (searchParams.get('debug') === 'feeds') {
+    return NextResponse.json({ feeds: await listFeeds().catch((e) => ({ error: e.message })) });
+  }
 
   if (!aliexpressDS.hasCredentials()) {
     return NextResponse.json(

@@ -1,32 +1,171 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCart } from './cart';
 import { CATEGORIES } from '@/lib/categories';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
 
-export default function Home() {
-  // Real supplier product imagery, fetched once from /api/categories.
-  // Until it lands, tiles render empty placeholder boxes.
-  const [catImages, setCatImages] = useState({});
-  const [keyword, setKeyword] = useState('wireless earbuds');
-  const [query, setQuery] = useState('wireless earbuds');
-  const [products, setProducts] = useState([]);
+// 1800 -> "1.8K", 12400 -> "12K", 2100000 -> "2.1M"
+function compact(n) {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1e4) return `${Math.round(n / 1e3)}K`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(n);
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
+    </svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path fill="#2e9d4f" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z" />
+    </svg>
+  );
+}
+
+function TruckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#3b6fd6" strokeWidth="1.8" aria-hidden="true">
+      <path d="M2 6h11v9H2zM13 9h4l3 3v3h-7z" /><circle cx="6.5" cy="17" r="1.8" /><circle cx="16.5" cy="17" r="1.8" />
+    </svg>
+  );
+}
+
+/** One product tile, used in both the best-picks row and search results. */
+function ProductCard({ p, onAdd }) {
+  const unavailable = p.shipping?.deliverable === false;
+  const href = `/product/${p.id}`;
+
+  return (
+    <article className="pc">
+      <div className="pc-media">
+        <Link href={href} className="pc-img" aria-label={p.title}>
+          {p.image && <img src={p.image} alt="" loading="lazy" />}
+        </Link>
+        <button
+          type="button"
+          className="pc-add"
+          aria-label={`Add ${p.title} to cart`}
+          disabled={unavailable}
+          onClick={() => onAdd(p)}
+        >
+          +
+        </button>
+      </div>
+
+      <Link href={href}><h3 className="pc-title">{p.title}</h3></Link>
+
+      {(p.rating || p.sold) && (
+        <p className="pc-meta">
+          {p.rating && <><StarIcon /><strong>{p.rating.toFixed(1)}</strong></>}
+          {p.sold && <span>{p.rating ? '·' : ''} {compact(p.sold)} sold</span>}
+        </p>
+      )}
+
+      <p className="pc-price">
+        <strong>{fmt(p.priceUGX)}</strong>
+        {p.originalUGX && <s>{fmt(p.originalUGX)}</s>}
+        {p.discountPct && <span className="pc-off">{p.discountPct}%</span>}
+      </p>
+
+      {p.shipping?.free && <p className="pc-ship"><TruckIcon /> Free Delivery</p>}
+    </article>
+  );
+}
+
+/**
+ * One paged list that is either AliExpress's best picks (no search) or the
+ * results of a search. Switching query starts over from page one.
+ */
+function useFeed(query) {
+  const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
-  // Set once we get back fewer than PAGE_SIZE results — the catalog has more
-  // pages than that on almost any keyword, so a short page means "last page",
-  // not "that's all there is".
   const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(true); // initial search / new keyword
-  const [loadingMore, setLoadingMore] = useState(false); // appending next page
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
-  const { add, setOpen } = useCart();
+  const urlFor = useCallback(
+    (n) =>
+      query
+        ? `/api/products?keyword=${encodeURIComponent(query)}&page=${n}&limit=${PAGE_SIZE}`
+        : `/api/trending?page=${n}&limit=${PAGE_SIZE}`,
+    [query]
+  );
 
-  // Category artwork — fetched once, cached upstream for an hour.
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setPage(1);
+    fetch(urlFor(1))
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (cancelled) return;
+        if (!ok) {
+          setError(d);
+          setItems([]);
+          setHasMore(false);
+        } else {
+          setItems(d.products || []);
+          setHasMore(Boolean(d.hasMore));
+        }
+      })
+      .catch((e) => !cancelled && setError({ error: 'Network error', message: e.message }))
+      .finally(() => !cancelled && setLoading(false));
+    return () => { cancelled = true; };
+  }, [urlFor]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMore || loading || !hasMore) return;
+    const next = page + 1;
+    setLoadingMore(true);
+    fetch(urlFor(next))
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (!ok) {
+          setHasMore(false);
+          return;
+        }
+        const list = d.products || [];
+        // AliExpress can repeat an item across pages.
+        setItems((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...list.filter((p) => !seen.has(p.id))];
+        });
+        setPage(next);
+        setHasMore(Boolean(d.hasMore));
+      })
+      .catch(() => setHasMore(false))
+      .finally(() => setLoadingMore(false));
+  }, [urlFor, page, hasMore, loading, loadingMore]);
+
+  return { items, hasMore, loading, loadingMore, error, loadMore };
+}
+
+export default function Home() {
+  // Real supplier product imagery for the category tiles, fetched once.
+  const [catImages, setCatImages] = useState({});
+  // keyword is what is typed; query is what was submitted. Empty query means
+  // the default view: whatever AliExpress ranks as best selling.
+  const [keyword, setKeyword] = useState('');
+  const [query, setQuery] = useState('');
+  const feed = useFeed(query);
+  const rowRef = useRef(null);
+
+  const { add, setOpen } = useCart();
+  const router = useRouter();
+
   useEffect(() => {
     let cancelled = false;
     fetch('/api/categories')
@@ -43,58 +182,29 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // New search term: reset to page 1 and replace the list.
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setPage(1);
-    fetch(`/api/products?keyword=${encodeURIComponent(query)}&page=1&limit=${PAGE_SIZE}`)
-      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => {
-        if (cancelled) return;
-        if (!ok) {
-          setError(d);
-          setProducts([]);
-          setHasMore(false);
-        } else {
-          const list = d.products || [];
-          setProducts(list);
-          setHasMore(Boolean(d.hasMore));
-        }
-      })
-      .catch((e) => !cancelled && setError({ error: 'Network error', message: e.message }))
-      .finally(() => !cancelled && setLoading(false));
-    return () => { cancelled = true; };
-  }, [query]);
-
-  const loadMore = () => {
-    if (loadingMore || loading || !hasMore) return;
-    const nextPage = page + 1;
-    setLoadingMore(true);
-    fetch(`/api/products?keyword=${encodeURIComponent(query)}&page=${nextPage}&limit=${PAGE_SIZE}`)
-      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => {
-        if (!ok) {
-          setHasMore(false);
-          return;
-        }
-        const list = d.products || [];
-        setProducts((prev) => {
-          // Guard against AliExpress ever repeating an item across pages.
-          const seen = new Set(prev.map((p) => p.id));
-          return [...prev, ...list.filter((p) => !seen.has(p.id))];
-        });
-        setPage(nextPage);
-        setHasMore(Boolean(d.hasMore));
-      })
-      .catch(() => setHasMore(false))
-      .finally(() => setLoadingMore(false));
+  const addToCart = (p) => {
+    // Without a quoted shipping cost checkout would refuse this item, so let the
+    // product page do the quoting rather than put something unbuyable in the cart.
+    if (!p.skuId || !p.shipping?.known) {
+      router.push(`/product/${p.id}`);
+      return;
+    }
+    add({
+      id: p.id,
+      name: p.title,
+      price: p.priceUGX,
+      img: p.image,
+      skuId: p.skuId,
+      shipUGX: p.shipping?.known ? p.shipping.costUGX : null,
+      handlingUGX: p.handlingUGX,
+    });
+    setOpen(true);
   };
 
+  // Searching for nothing goes back to the best picks.
   const submitSearch = (e) => {
     e.preventDefault();
-    if (keyword.trim()) setQuery(keyword.trim());
+    setQuery(keyword.trim());
   };
 
   const pickCategory = (cat) => {
@@ -103,90 +213,85 @@ export default function Home() {
     document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  const scrollRow = (dir) =>
+    rowRef.current?.scrollBy({ left: dir * rowRef.current.clientWidth * 0.8, behavior: 'smooth' });
+
+  const { items, hasMore, loading, loadingMore, error, loadMore } = feed;
+
   return (
     <>
       {/* ===== Search bar ===== */}
       <div className="top-search">
-        <form className="shop-search" onSubmit={submitSearch}>
+        <form className="sb" onSubmit={submitSearch} role="search">
+          <button type="submit" className="sb-icon" aria-label="Search"><SearchIcon /></button>
           <input
-            type="text"
+            type="search"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="Search any product…"
+            placeholder='Search "Shoes"'
+            aria-label="Search products"
+            enterKeyHint="search"
           />
-          <button type="submit" disabled={loading}>{loading ? 'Searching…' : 'Search'}</button>
         </form>
       </div>
 
-      {/* ===== Products ===== */}
-      <section className="section section-space" id="shop">
-        <div className="space-inner">
-          {loading && <p className="shop-status">Loading products…</p>}
-
-          {error && !loading && (
-            <div className="shop-status error">
-              <strong>{error.error || 'Could not load products'}</strong>
-              {error.message && <div className="hint">{error.message}</div>}
-              {error.hint && <div className="hint">{error.hint}</div>}
+      {/* ===== Best picks / search results ===== */}
+      <section className="section feed" id="shop">
+        {!query && (
+          <div className="feed-head">
+            <h2 className="feed-title">Best picks for you</h2>
+            <div className="feed-arrows">
+              <button type="button" onClick={() => scrollRow(-1)} aria-label="Scroll left">‹</button>
+              <button type="button" onClick={() => scrollRow(1)} aria-label="Scroll right">›</button>
             </div>
-          )}
+          </div>
+        )}
 
-          {!loading && !error && products.length === 0 && (
-            <p className="shop-status">No products found for “{query}”. Try another search.</p>
-          )}
+        {loading && (
+          <div className={query ? 'pgrid' : 'hscroll'} aria-busy="true">
+            {Array.from({ length: query ? 8 : 5 }).map((_, i) => (
+              <div className="pc pc-skeleton" key={i}><div className="pc-media" /><i /><i /></div>
+            ))}
+          </div>
+        )}
 
-          {!loading && !error && products.length > 0 && (
-            <>
-              <div className="product-grid">
-                {products.map((p) => (
-                  <article className="product-card" key={p.id}>
-                    <Link href={`/product/${p.id}`} className="product-img">
-                      {p.image && <img src={p.image} alt={p.title} />}
-                    </Link>
-                    <Link href={`/product/${p.id}`}>
-                      <h3 className="product-name">{p.title}</h3>
-                    </Link>
-                    <p className="product-price"><span className="new-price">{fmt(p.priceUGX)}</span></p>
-                    <button
-                      className="add-cart"
-                      // Never sell what the supplier won't ship to Uganda.
-                      disabled={p.shipping?.deliverable === false}
-                      onClick={() => {
-                        add({
-                          id: p.id,
-                          name: p.title,
-                          price: p.priceUGX,
-                          img: p.image,
-                          skuId: p.skuId,
-                          shipUGX: p.shipping?.known ? p.shipping.costUGX : null,
-                          handlingUGX: p.handlingUGX,
-                        });
-                        setOpen(true);
-                      }}
-                    >
-                      {p.shipping?.deliverable === false ? 'Unavailable' : 'Add to Cart'}
-                    </button>
-                  </article>
-                ))}
-              </div>
+        {error && !loading && (
+          <div className="shop-status error">
+            <strong>{error.error || 'Could not load products'}</strong>
+            {error.message && <div className="hint">{error.message}</div>}
+          </div>
+        )}
 
-              {hasMore && (
-                <button
-                  type="button"
-                  className="load-more"
-                  onClick={loadMore}
-                  disabled={loadingMore}
-                >
-                  {loadingMore ? 'Loading…' : 'View More'}
-                </button>
-              )}
+        {!loading && !error && items.length === 0 && (
+          <p className="shop-status">No products found for “{query}”. Try another search.</p>
+        )}
 
-              {!hasMore && (
-                <p className="shop-status">You’ve reached the end of the results for “{query}”.</p>
-              )}
-            </>
-          )}
-        </div>
+        {!loading && !error && items.length > 0 && !query && (
+          <div className="hscroll" ref={rowRef}>
+            {items.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} />)}
+            {hasMore && (
+              <button type="button" className="hscroll-more" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading…' : <>See more <span aria-hidden="true">→</span></>}
+              </button>
+            )}
+          </div>
+        )}
+
+        {!loading && !error && items.length > 0 && query && (
+          <>
+            <div className="pgrid">
+              {items.map((p) => <ProductCard key={p.id} p={p} onAdd={addToCart} />)}
+            </div>
+
+            {hasMore ? (
+              <button type="button" className="load-more" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading…' : 'View More'}
+              </button>
+            ) : (
+              <p className="shop-status">You’ve reached the end of the results for “{query}”.</p>
+            )}
+          </>
+        )}
       </section>
 
       {/* ===== Categories ===== */}

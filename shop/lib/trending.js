@@ -19,6 +19,24 @@ const FEED_RETRY_AFTER_MS = 60 * 60 * 1000;
 const FEED_PREFERENCE = [/best.?sell/i, /hot/i, /top/i, /popular|trend|recommend/i];
 const MIN_FEED_RESULTS = 4;
 
+// AliExpress's own best-seller lists for mainstream shopping categories, mixed
+// so the home page shows a spread of what sells rather than one niche. Matched
+// against the account's real feed names, because AliExpress renames feeds and a
+// feed missing from this list is simply skipped. TRENDING_FEEDS (comma
+// separated, exact names) overrides it.
+const PREFERRED_FEEDS = [
+  /^DS_ConsumerElectronics_bestsellers$/i,
+  /^DS_Home&Kitchen_bestsellers$/i,
+  /^DS_Beauty_bestsellers$/i,
+  /^DS_Sports&Outdoors_bestsellers$/i,
+  /^DS_Automobile&Accessories_bestsellers$/i,
+  /i69_FullCategory_TopSellers/i,
+  /^phones&accessories_ZA topsellers/i,
+  /^home appliances_ZA topsellers/i,
+];
+// Below this a product is poorly reviewed whatever its sales; unrated is kept.
+const MIN_RATING = 4;
+
 let feedNames = { at: 0, names: [] };
 let feedUnavailableUntil = 0;
 
@@ -41,15 +59,37 @@ export function rankFeeds(names, preferred = process.env.TRENDING_FEED_NAME) {
   return ranked.slice(0, 3);
 }
 
+/** The feeds to blend: the preferred mix if the account has it, else the best single feed. */
+export function chooseFeeds(names, override = process.env.TRENDING_FEEDS) {
+  const custom = String(override || '').split(',').map((n) => n.trim()).filter(Boolean);
+  const mix = custom.length
+    ? custom.filter((n) => names.includes(n))
+    : PREFERRED_FEEDS.map((re) => names.find((n) => re.test(n))).filter(Boolean);
+  return mix.length >= 2 ? mix : rankFeeds(names).slice(0, 2);
+}
+
 async function fromFeed({ page, pageSize }) {
   if (Date.now() < feedUnavailableUntil) return null;
   try {
     const names = await discoverFeeds();
-    for (const feedName of rankFeeds(names)) {
-      const products = await aliexpressDS.recommendFeed({ feedName, page, pageSize });
-      if (products.length >= MIN_FEED_RESULTS) return { source: `feed:${feedName}`, products };
-    }
-    console.warn('[trending] no feed returned enough products; names:', JSON.stringify(names));
+    const feeds = chooseFeeds(names);
+    if (!feeds.length) return null;
+
+    const perFeed = Math.max(4, Math.ceil(pageSize / feeds.length) + 2);
+    const lists = await Promise.all(
+      feeds.map((feedName) =>
+        aliexpressDS
+          .recommendFeed({ feedName, page, pageSize: perFeed })
+          .then((l) => l.filter((p) => !(p.rating && p.rating < MIN_RATING)))
+          .catch((e) => {
+            console.warn(`[trending] feed "${feedName}" failed:`, e.message);
+            return [];
+          })
+      )
+    );
+    const products = interleave(lists, pageSize);
+    if (products.length >= MIN_FEED_RESULTS) return { source: `feeds:${feeds.length}`, products };
+    console.warn('[trending] feeds returned too little:', JSON.stringify(feeds));
   } catch (e) {
     // Most likely the account lacks access to feeds. Don't hammer a method
     // that will keep failing — fall back and look again later.
@@ -142,5 +182,3 @@ export async function getTrending({ page = 1, pageSize = 20 } = {}) {
   return { ...found, products: await attachSkus(found.products) };
 }
 
-/** Names of the feeds this account can read. */
-export const listFeeds = () => discoverFeeds();

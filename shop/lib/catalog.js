@@ -1,8 +1,14 @@
 import { aliexpressDS } from './aliexpress.js';
 import { itemUGX, shipUGX } from './pricing.js';
 import { handlingFee } from './shipping-destination.js';
+import { mapPool, memoAsync } from './pool.js';
 
-const FREIGHT_CONCURRENCY = 8;
+// AliExpress answers a freight quote in ~0.4s, so these run in parallel; this
+// is the most we will have in flight at once.
+const FREIGHT_CONCURRENCY = 12;
+// Shipping cost to Uganda for a given product option changes rarely. Charging
+// never relies on this copy: checkout re-quotes live in lib/pricing.js.
+const FREIGHT_TTL_MS = 6 * 60 * 60 * 1000;
 // A slow freight lookup must not hold up the whole listing. Past this, the
 // product is returned with shipping unknown rather than not returned at all.
 const FREIGHT_TIMEOUT_MS = 6000;
@@ -16,27 +22,24 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * an unknown shipping cost is still worth showing, but a listing that 502s
  * because one freight lookup timed out is not.
  */
+const cachedFreight = memoAsync(
+  (key) => {
+    const [productId, skuId] = key.split(':');
+    return withTimeout(aliexpressDS.queryFreight({ productId, skuId }), FREIGHT_TIMEOUT_MS);
+  },
+  { ttlMs: FREIGHT_TTL_MS }
+);
+
 export async function quoteFreightForAll(products) {
-  const results = new Array(products.length).fill(null);
-
-  for (let start = 0; start < products.length; start += FREIGHT_CONCURRENCY) {
-    const batch = products.slice(start, start + FREIGHT_CONCURRENCY);
-    await Promise.all(
-      batch.map(async (p, j) => {
-        if (!p.skuId || !p.id) return; // no SKU, nothing to quote against
-        try {
-          results[start + j] = await withTimeout(
-            aliexpressDS.queryFreight({ productId: p.id, skuId: p.skuId }),
-            FREIGHT_TIMEOUT_MS
-          );
-        } catch (e) {
-          console.warn(`Freight quote failed for ${p.id}:`, e.message);
-        }
-      })
-    );
-  }
-
-  return results;
+  return mapPool(products, FREIGHT_CONCURRENCY, async (p) => {
+    if (!p.skuId || !p.id) return null; // no SKU, nothing to quote against
+    try {
+      return await cachedFreight(`${p.id}:${p.skuId}`);
+    } catch (e) {
+      console.warn(`Freight quote failed for ${p.id}:`, e.message);
+      return null;
+    }
+  });
 }
 
 function withTimeout(promise, ms) {

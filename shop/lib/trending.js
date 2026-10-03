@@ -1,5 +1,6 @@
 import { aliexpressDS } from './aliexpress.js';
 import { CATEGORIES } from './categories.js';
+import { mapPool, memoAsync } from './pool.js';
 
 /**
  * "Best picks": what AliExpress itself ranks as best selling, not a keyword we
@@ -169,7 +170,21 @@ async function fromCategories({ page, pageSize }) {
   return { source: 'categories', products: interleave(lists, pageSize) };
 }
 
-const SKU_LOOKUP_CONCURRENCY = 6;
+const SKU_LOOKUP_CONCURRENCY = 12;
+const OPTION_TTL_MS = 6 * 60 * 60 * 1000;
+
+// Which option to list a product at, remembered so the same best sellers aren't
+// looked up again on every page and every cold start of this server.
+const cheapestOption = memoAsync(
+  async (productId) => {
+    const d = await aliexpressDS.getProduct({ productId });
+    // Unknown stock counts as available, matching what checkout allows.
+    const inStock = (v) => v.stock == null || v.stock === '' || Number(v.stock) > 0;
+    const options = d.variants.filter((v) => v.skuId && v.priceUSD > 0 && inStock(v));
+    return options.sort((a, b) => a.priceUSD - b.priceUSD)[0] || null;
+  },
+  { ttlMs: OPTION_TTL_MS }
+);
 
 /**
  * Feed items arrive without a SKU, and without one there is no shipping quote
@@ -178,36 +193,24 @@ const SKU_LOOKUP_CONCURRENCY = 6;
  * and the item added to the cart are all the same thing.
  */
 export async function attachSkus(products) {
-  const out = [...products];
-  const todo = out.map((p, i) => [p, i]).filter(([p]) => !p.skuId);
-
-  for (let start = 0; start < todo.length; start += SKU_LOOKUP_CONCURRENCY) {
-    await Promise.all(
-      todo.slice(start, start + SKU_LOOKUP_CONCURRENCY).map(async ([p, i]) => {
-        try {
-          const d = await aliexpressDS.getProduct({ productId: p.id });
-          // Unknown stock counts as available, matching what checkout allows.
-          const inStock = (v) => v.stock == null || v.stock === '' || Number(v.stock) > 0;
-          const options = d.variants.filter((v) => v.skuId && v.priceUSD > 0 && inStock(v));
-          const best = options.sort((a, b) => a.priceUSD - b.priceUSD)[0];
-          if (!best) {
-            out[i] = null; // nothing purchasable
-            return;
-          }
-          const original = p.originalUSD && p.originalUSD > best.priceUSD ? p.originalUSD : null;
-          out[i] = {
-            ...p,
-            skuId: best.skuId,
-            priceUSD: best.priceUSD,
-            originalUSD: original,
-            discountPct: original ? Math.round((1 - best.priceUSD / original) * 100) : null,
-          };
-        } catch (e) {
-          console.warn(`[trending] could not resolve an option for ${p.id}:`, e.message);
-        }
-      })
-    );
-  }
+  const out = await mapPool(products, SKU_LOOKUP_CONCURRENCY, async (p) => {
+    if (p.skuId) return p;
+    try {
+      const best = await cheapestOption(p.id);
+      if (!best) return null; // nothing purchasable
+      const original = p.originalUSD && p.originalUSD > best.priceUSD ? p.originalUSD : null;
+      return {
+        ...p,
+        skuId: best.skuId,
+        priceUSD: best.priceUSD,
+        originalUSD: original,
+        discountPct: original ? Math.round((1 - best.priceUSD / original) * 100) : null,
+      };
+    } catch (e) {
+      console.warn(`[trending] could not resolve an option for ${p.id}:`, e.message);
+      return p;
+    }
+  });
   return out.filter(Boolean);
 }
 

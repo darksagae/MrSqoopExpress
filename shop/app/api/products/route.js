@@ -13,6 +13,11 @@ import {
 const MARKUP_PERCENTAGE = parseFloat(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE || '0');
 const USD_TO_UGX_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE || '3700');
 
+// The same searches repeat constantly (every category tile, every popular term),
+// and each uncached one costs a search plus a shipping quote per product. Serve
+// repeats from the CDN, and serve a stale copy instantly while refreshing it.
+const SEARCH_CACHE = 'public, s-maxage=600, stale-while-revalidate=3600';
+
 // Filtering removes results, so more are fetched than the caller asked for.
 const OVERFETCH = 1.6;
 const MAX_PAGE_SIZE = 50;
@@ -107,7 +112,7 @@ export async function GET(request) {
       destination: { ...CUSTOMER_DESTINATION, label: CUSTOMER_DESTINATION_LABEL },
       handlingFeePercent: HANDLING_FEE_PERCENT,
       products: shown,
-    });
+    }, { headers: { 'Cache-Control': SEARCH_CACHE } });
   } catch (error) {
     console.error('AliExpress product fetch failed:', error);
     return NextResponse.json(

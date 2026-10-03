@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
-import { getTrending } from '@/lib/trending';
-import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
+import { getBestPicks } from '@/lib/best-picks';
 
 const MAX_LIMIT = 30;
 // Everyone sees the same best sellers, so let the CDN answer most requests:
@@ -28,12 +27,7 @@ export async function GET(request) {
   }
 
   try {
-    // A little extra, because undeliverable products are dropped afterwards.
-    const { source, products } = await getTrending({ page, pageSize: Math.ceil(limit * 1.4) });
-    const freights = await quoteFreightForAll(products);
-    const priced = priceProducts(products, freights)
-      .filter((p) => p.shipping.deliverable !== false)
-      .slice(0, limit);
+    const { source, products: priced, hasMore } = await getBestPicks({ page, limit });
 
     // Past the end of the list is just an empty page; only an empty first page is a failure.
     if (!priced.length && page > 1) {
@@ -50,7 +44,7 @@ export async function GET(request) {
     }
 
     return NextResponse.json(
-      { success: true, source, count: priced.length, hasMore: products.length > 0, products: priced },
+      { success: true, source, count: priced.length, hasMore, products: priced },
       { headers: { 'Cache-Control': CACHE } }
     );
   } catch (error) {

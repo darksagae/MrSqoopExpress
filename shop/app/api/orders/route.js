@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveProvider, networkStatus, NETWORKS } from '@/lib/payments/resolve';
 import { createOrder, newOrderId, attachPaymentRef, failUnsentOrder } from '@/lib/orders';
 import { confirmCartTotal } from '@/lib/pricing';
+import { detectNetwork } from '@/lib/payments/networks';
 
 /**
  * POST /api/orders
@@ -37,6 +38,17 @@ export async function POST(request) {
   }
   if (!items.length || !Number(total)) {
     return NextResponse.json({ error: 'Your cart is empty.' }, { status: 400 });
+  }
+
+  // A prompt sent to the wrong network never arrives, and the customer is left
+  // waiting on a PIN request that will never come. Catch it before charging.
+  const actual = detectNetwork(customer.phone);
+  if (actual && actual !== network) {
+    const name = actual === 'mtn' ? 'MTN Mobile Money' : 'Airtel Money';
+    return NextResponse.json(
+      { error: `${customer.phone} is ${actual === 'mtn' ? 'an MTN' : 'an Airtel'} number. Please choose ${name}.`, code: 'NETWORK_MISMATCH', network: actual },
+      { status: 400 }
+    );
   }
 
   const { provider, ready, missing, label } = resolveProvider(network);

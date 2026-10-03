@@ -5,17 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../cart';
 import { CUSTOMER_DESTINATION_LABEL } from '@/lib/shipping-destination';
+import { detectNetwork } from '@/lib/payments/networks';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
-
-// Guess the network from a Uganda number prefix (customer can override).
-function guessNetwork(phone) {
-  const p = String(phone).replace(/[^0-9]/g, '').replace(/^256/, '');
-  const pre = p.replace(/^0/, '').slice(0, 2);
-  if (['77', '78', '76', '39', '31'].includes(pre)) return 'mtn';
-  if (['70', '75', '74', '20'].includes(pre)) return 'airtel';
-  return null;
-}
 
 // Hand the browser to the hosted card page with the server-signed fields.
 function postToCardPage(endpoint, fields) {
@@ -52,7 +44,7 @@ export default function CheckoutPage() {
   // Auto-detect network from the phone number until the user picks manually.
   useEffect(() => {
     if (touchedNetwork) return;
-    const g = guessNetwork(phone);
+    const g = detectNetwork(phone);
     if (g) setNetwork(g);
   }, [phone, touchedNetwork]);
 
@@ -150,6 +142,7 @@ export default function CheckoutPage() {
       const data = await res.json();
       if (!res.ok) {
         if (data.code === 'PRICE_CHANGED' && data.items) reprice(data.items);
+        if (data.code === 'NETWORK_MISMATCH' && data.network) setNetwork(data.network);
         setError(data.error);
         return;
       }

@@ -40,10 +40,34 @@ export interface Order {
   createdAt: string
 }
 
+/**
+ * The operator's decision on a paid order. Paid orders arrive as 'pending' and
+ * nothing is bought from the supplier until someone confirms them.
+ */
+export type ReviewStatus = 'pending' | 'confirmed' | 'on_hold' | 'cancelled'
+export type ReviewAction = 'confirm' | 'hold' | 'cancel'
+
+export interface OrderReview {
+  status: ReviewStatus
+  at: string | null
+  note: string | null
+}
+
 /** Operator view: the public fields plus how it was paid and what to buy. */
 export interface AdminOrder extends Order {
   payment: OrderPayment | null
   items: OrderItem[]
+  review: OrderReview | null
+}
+
+const REVIEW_STATUSES: readonly string[] = ['pending', 'confirmed', 'on_hold', 'cancelled']
+
+// Which decisions are allowed from which state. A cancelled order is final,
+// and a confirmed one can't be put back on hold once it may have been bought.
+const REVIEW_TRANSITIONS: Record<ReviewAction, { to: ReviewStatus; from: ReviewStatus[] }> = {
+  confirm: { to: 'confirmed', from: ['pending', 'on_hold'] },
+  hold: { to: 'on_hold', from: ['pending'] },
+  cancel: { to: 'cancelled', from: ['pending', 'on_hold'] },
 }
 
 type OrderRow = {
@@ -61,6 +85,9 @@ type OrderRow = {
   payment_ref?: string | null
   paid_at?: string | Date | null
   order_items?: OrderItem[] | string | null
+  admin_status?: string | null
+  admin_status_at?: string | Date | null
+  admin_note?: string | null
 }
 
 const PAYMENT_METHODS: readonly string[] = ['mtn', 'airtel', 'card']
@@ -81,7 +108,10 @@ function ensureOrderColumns(): Promise<boolean> {
             ADD COLUMN IF NOT EXISTS payment_method TEXT,
             ADD COLUMN IF NOT EXISTS payment_ref TEXT,
             ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
-            ADD COLUMN IF NOT EXISTS order_items JSONB
+            ADD COLUMN IF NOT EXISTS order_items JSONB,
+            ADD COLUMN IF NOT EXISTS admin_status TEXT,
+            ADD COLUMN IF NOT EXISTS admin_status_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS admin_note TEXT
         `
         return true
       } catch (error) {
@@ -144,6 +174,14 @@ function rowToAdminOrder(row: OrderRow): AdminOrder {
           }
         : null,
     items,
+    review:
+      row.admin_status && REVIEW_STATUSES.includes(row.admin_status)
+        ? {
+            status: row.admin_status as ReviewStatus,
+            at: row.admin_status_at ? new Date(row.admin_status_at).toISOString() : null,
+            note: row.admin_note ?? null,
+          }
+        : null,
   }
 }
 
@@ -226,7 +264,8 @@ export async function createOrder(input: {
           payment_method,
           payment_ref,
           paid_at,
-          order_items
+          order_items,
+          admin_status
         )
         VALUES (
           ${trackingId},
@@ -240,7 +279,8 @@ export async function createOrder(input: {
           ${input.payment?.method ?? null},
           ${input.payment?.ref ?? null},
           ${input.payment?.paidAt ?? null},
-          ${JSON.stringify(input.items ?? [])}::jsonb
+          ${JSON.stringify(input.items ?? [])}::jsonb,
+          ${input.payment ? 'pending' : null}
         )
         RETURNING *
       `
@@ -308,6 +348,31 @@ export async function updateOrderBilling(id: string, billingUgx: number) {
   `
   if (rows.length === 0) return null
   return rowToAdminOrder(rows[0] as OrderRow)
+}
+
+/**
+ * Record the operator's decision. Guarded on the current status so a double
+ * click or two operators at once can't, say, confirm an order already cancelled.
+ *
+ * @returns the updated order, 'not_found', or 'invalid' when the order isn't in
+ *          a state that allows this action.
+ */
+export async function reviewOrder(id: string, action: ReviewAction, note?: string) {
+  const rule = REVIEW_TRANSITIONS[action]
+  await ensureOrderColumns()
+  const sql = getSql()
+  const rows = await sql`
+    UPDATE orders
+    SET admin_status = ${rule.to},
+        admin_status_at = now(),
+        admin_note = ${note?.trim() ? note.trim().slice(0, 500) : null}
+    WHERE id = ${id}
+      AND admin_status = ANY(${rule.from})
+    RETURNING *
+  `
+  if (rows.length) return rowToAdminOrder(rows[0] as OrderRow)
+  const exists = await sql`SELECT 1 FROM orders WHERE id = ${id} LIMIT 1`
+  return exists.length ? ('invalid' as const) : ('not_found' as const)
 }
 
 export async function deleteOrder(id: string) {

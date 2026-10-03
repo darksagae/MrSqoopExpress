@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireAdmin } from '../_lib/auth.js'
-import { advanceOrder, deleteOrder, updateOrderBilling } from '../_lib/orders.js'
+import { advanceOrder, deleteOrder, reviewOrder, updateOrderBilling, type ReviewAction } from '../_lib/orders.js'
 import { sendOrderStatusPush } from '../_lib/push.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -13,6 +13,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     if (req.method === 'PATCH') {
+      // Operator decision on a paid order: confirm, hold or cancel.
+      if (req.body?.review !== undefined) {
+        const action = String(req.body.review) as ReviewAction
+        if (!['confirm', 'hold', 'cancel'].includes(action)) {
+          return res.status(400).json({ error: 'Unknown review action.' })
+        }
+        const reviewed = await reviewOrder(id, action, req.body.note)
+        if (reviewed === 'not_found') return res.status(404).json({ error: 'Order not found.' })
+        if (reviewed === 'invalid') {
+          return res.status(409).json({ error: 'This order can no longer be changed that way. Refresh to see its current status.' })
+        }
+
+        // Confirming starts processing, which the customer sees on their tracking page.
+        let order = reviewed
+        if (action === 'confirm' && reviewed.currentStageIndex === 0) {
+          order = (await advanceOrder(id, 'Confirmed by MrSqoopExpress')) ?? reviewed
+          try {
+            await sendOrderStatusPush(order)
+          } catch (pushError) {
+            console.error('Order status push failed', pushError)
+          }
+        }
+        return res.status(200).json({ order })
+      }
+
       if (req.body?.billingUgx !== undefined) {
         const amount = Number(req.body.billingUgx)
         if (!Number.isFinite(amount) || amount < 0) {

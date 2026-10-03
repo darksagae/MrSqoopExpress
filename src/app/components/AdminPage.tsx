@@ -9,6 +9,7 @@ import {
   deleteOrder,
   fetchAllOrders,
   migrateDatabase,
+  reviewOrder,
   updateOrderBilling,
 } from '../lib/ordersApi'
 import {
@@ -28,11 +29,12 @@ import {
   SHIPPING_WEBSITES,
   type ShippingWebsite,
 } from '../constants/shippingWebsites'
-import { TRACKING_STAGES, type Order } from '../types/order'
+import { TRACKING_STAGES, type Order, type ReviewAction } from '../types/order'
 
 const GOLD = '#E8B923'
 
 const FILTER_LABELS: Record<OrderFilter, string> = {
+  awaiting: 'Awaiting Confirmation',
   all: 'All Orders',
   inTransit: 'In Transit',
   atCustoms: 'At Customs',
@@ -177,6 +179,100 @@ function BillingEditor({
   )
 }
 
+const REVIEW_BADGE = {
+  pending: { label: 'AWAITING CONFIRMATION', className: 'bg-[#E8B923] text-black' },
+  on_hold: { label: 'ON HOLD', className: 'bg-orange-500 text-black' },
+  confirmed: { label: 'CONFIRMED', className: 'bg-emerald-500 text-black' },
+  cancelled: { label: 'CANCELLED', className: 'bg-red-500 text-white' },
+} as const
+
+const REVIEW_PROMPTS: Record<ReviewAction, string> = {
+  confirm: 'Confirm this order? The customer will see it move to "Order Processing".',
+  hold: 'Put this order on hold?',
+  cancel: 'Cancel this order? The customer has already paid, so you must refund them in LipaPay or Absa.',
+}
+
+function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const review = order.review
+  if (!review) return null
+
+  const act = async (action: ReviewAction) => {
+    if (!confirm(REVIEW_PROMPTS[action])) return
+    const note = action === 'confirm' ? undefined : prompt('Reason (optional):') ?? undefined
+    setBusy(true)
+    try {
+      await reviewOrder(order.id, action, note)
+      await onUpdate()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not update this order. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const badge = REVIEW_BADGE[review.status]
+  const open = review.status === 'pending' || review.status === 'on_hold'
+
+  return (
+    <div className="mt-3 rounded-xl border border-neutral-800 bg-black/40 p-3">
+      <p className="flex flex-wrap items-center gap-2 text-sm">
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${badge.className}`}>{badge.label}</span>
+        {review.at && review.status !== 'pending' && (
+          <span className="text-neutral-500">{formatTimestamp(review.at)}</span>
+        )}
+      </p>
+      {review.note && <p className="mt-2 text-sm text-neutral-400">Note: {review.note}</p>}
+
+      {review.status === 'pending' && (
+        <p className="mt-2 text-sm text-neutral-400">
+          Paid. Check the price and stock on AliExpress, then confirm.
+        </p>
+      )}
+      {review.status === 'confirmed' && (
+        <p className="mt-2 text-sm text-neutral-400">
+          Place this order on AliExpress using the links below. Automatic ordering is paused for now.
+        </p>
+      )}
+      {review.status === 'cancelled' && (
+        <p className="mt-2 text-sm text-red-300">Refund the customer in LipaPay or Absa if you haven’t already.</p>
+      )}
+
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act('confirm')}
+            className="rounded-full px-4 py-2 text-sm font-bold text-black disabled:opacity-60"
+            style={{ backgroundColor: GOLD }}
+          >
+            Confirm order
+          </button>
+          {review.status === 'pending' && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void act('hold')}
+              className="rounded-full border border-neutral-600 px-4 py-2 text-sm text-neutral-200 disabled:opacity-60"
+            >
+              Hold
+            </button>
+          )}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void act('cancel')}
+            className="rounded-full border border-red-700 px-4 py-2 text-sm text-red-300 disabled:opacity-60"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PaymentAndItems({ order }: { order: Order }) {
   const items = order.items ?? []
   const payment = order.payment
@@ -307,6 +403,7 @@ function OrderRow({
         From <span className="text-neutral-300">{order.websiteShippedFrom}</span>
       </p>
 
+      <ReviewPanel order={order} onUpdate={onUpdate} />
       <PaymentAndItems order={order} />
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -530,6 +627,12 @@ export function AdminPage() {
 
         <section className="mt-8">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <StatCard
+              label="Awaiting Confirmation"
+              value={stats.awaiting}
+              active={activeFilter === 'awaiting'}
+              onClick={() => toggleFilter('awaiting')}
+            />
             <StatCard
               label="Total Orders"
               value={stats.total}

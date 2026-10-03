@@ -2,12 +2,16 @@ import { TRACKING_STAGES, type Order, type OrderItem, type TrackingStepView } fr
 
 const KAMPALA_TZ = 'Africa/Kampala'
 
-export type OrderFilter = 'all' | 'inTransit' | 'atCustoms' | 'readyForPickup' | 'delivered'
+export type OrderFilter = 'awaiting' | 'all' | 'inTransit' | 'atCustoms' | 'readyForPickup' | 'delivered'
 
 const DELIVERED_STAGE = TRACKING_STAGES.length - 1
 
 export function orderMatchesFilter(order: Order, filter: OrderFilter) {
   if (filter === 'all') return true
+  // Paid and waiting on the operator: not yet bought from the supplier.
+  if (filter === 'awaiting') {
+    return order.review?.status === 'pending' || order.review?.status === 'on_hold'
+  }
   if (filter === 'inTransit') {
     return order.currentStageIndex > 0 && order.currentStageIndex < 5
   }
@@ -27,6 +31,7 @@ export function filterOrdersByCategory(orders: Order[], filter: OrderFilter) {
 export function getOrderStats(orders: Order[]) {
   return {
     total: orders.length,
+    awaiting: filterOrdersByCategory(orders, 'awaiting').length,
     inTransit: filterOrdersByCategory(orders, 'inTransit').length,
     atCustoms: filterOrdersByCategory(orders, 'atCustoms').length,
     readyForPickup: filterOrdersByCategory(orders, 'readyForPickup').length,

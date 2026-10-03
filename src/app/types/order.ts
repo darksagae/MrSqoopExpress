@@ -38,6 +38,16 @@ export interface OrderPayment {
   paidAt: string | null
 }
 
+export type ReviewStatus = 'pending' | 'confirmed' | 'on_hold' | 'cancelled'
+export type ReviewAction = 'confirm' | 'hold' | 'cancel'
+
+/** The operator's decision on a paid order. Admin only. */
+export interface OrderReview {
+  status: ReviewStatus
+  at: string | null
+  note: string | null
+}
+
 export interface Order {
   id: string
   trackingId: string
@@ -51,6 +61,7 @@ export interface Order {
   createdAt: string
   payment?: OrderPayment | null
   items?: OrderItem[]
+  review?: OrderReview | null
 }
 
 export interface TrackingStepView {

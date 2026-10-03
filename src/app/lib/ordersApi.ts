@@ -1,4 +1,4 @@
-import type { Order } from '../types/order'
+import type { Order, ReviewAction } from '../types/order'
 
 const AUTH_KEY = 'mrsqoop_admin_token'
 
@@ -141,6 +141,17 @@ export async function updateOrderBilling(id: string, billingUgx: number): Promis
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify({ billingUgx }),
+  })
+  const data = await parseJson<{ order: Order }>(response)
+  return data.order
+}
+
+/** Confirm, hold or cancel a paid order. Throws with the server's message on a conflict. */
+export async function reviewOrder(id: string, review: ReviewAction, note?: string): Promise<Order> {
+  const response = await fetch(`/api/orders/item?id=${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ review, note }),
   })
   const data = await parseJson<{ order: Order }>(response)
   return data.order

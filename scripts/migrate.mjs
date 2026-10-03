@@ -45,7 +45,10 @@ async function migrate() {
       ADD COLUMN IF NOT EXISTS payment_method TEXT,
       ADD COLUMN IF NOT EXISTS payment_ref TEXT,
       ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS order_items JSONB
+      ADD COLUMN IF NOT EXISTS order_items JSONB,
+      ADD COLUMN IF NOT EXISTS admin_status TEXT,
+      ADD COLUMN IF NOT EXISTS admin_status_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS admin_note TEXT
   `
 
   await sql`CREATE INDEX IF NOT EXISTS idx_orders_tracking_id_lower ON orders (LOWER(tracking_id))`

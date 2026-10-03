@@ -203,6 +203,31 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
 }
 
 /**
+ * Prepaid bill enquiry: looks up the wallet holder's name and the fee for an
+ * amount. Charges nothing, but it is IP-gated like unifiedorder, so it is the
+ * safe way to prove our fixed IP is whitelisted.
+ *
+ * @returns {{ ok: boolean, statusCode: number, errors: string|null, data: object|null }}
+ */
+export async function billEnquiry({ phone, amountUGX = MIN_AMOUNT_UGX }) {
+  const { json } = await call('/api/pay/bill', {
+    Version: 'v1.0',
+    MchID: Number(MCH_ID),
+    TimeStamp: Math.floor(Date.now() / 1000),
+    Channel: 0, // auto-detect MTN vs Airtel from the prefix
+    TransactionType: 1,
+    TraderID: normalizeMsisdn(phone),
+    Amount: Math.round(amountUGX) * 100,
+  });
+  return {
+    ok: Boolean(json.Succeeded),
+    statusCode: json.StatusCode,
+    errors: json.Succeeded ? null : errorText(json.Errors),
+    data: json.Data || null,
+  };
+}
+
+/**
  * Authoritative status for an order.
  *
  * @param outTradeNo our order id, as passed to requestToPay

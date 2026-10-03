@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { egressFetch } from '../egress.js';
 
 /**
  * LipaPay — aggregated MTN Mobile Money + Airtel Money collection.
@@ -21,8 +22,8 @@ import crypto from 'crypto';
  * places the vendor docs are wrong.
  *
  * NOTE: LipaPay IP-whitelists its transactional endpoints. Vercel serverless
- * has dynamic egress IPs, so this will 403 in production until a static IP is
- * in place — which is why PAYMENT_PROVIDER gates it (see resolve.js).
+ * has dynamic egress IPs, so calls go out through the fixed-IP egress proxy
+ * (lib/egress.js, infra/egress-proxy) once EGRESS_PROXY_* is set.
  */
 
 const MCH_ID = process.env.LIPAPAY_MCH_ID;
@@ -112,7 +113,8 @@ export const RESULT_FIELDS = [
 ];
 
 async function call(path, fields) {
-  const res = await fetch(BASE_URL + path, {
+  // Leaves from the fixed, whitelisted IP when the egress proxy is configured.
+  const res = await egressFetch(BASE_URL + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...fields, Sign: sign(fields) }),

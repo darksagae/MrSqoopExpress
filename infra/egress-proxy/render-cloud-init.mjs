@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Build the cloud-init user-data that turns a fresh Ubuntu 24.04 server into
+ * Build the cloud-init user-data that turns a fresh Debian 12 (or Ubuntu) server into
  * the egress proxy on first boot, with no one having to log in to it.
  *
  *   node render-cloud-init.mjs <secrets-dir> > user-data.yaml

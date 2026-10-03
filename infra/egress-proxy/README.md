@@ -15,7 +15,7 @@ needs a password, and only connects to hosts on `PROXY_ALLOW`, port 443.
    openssl rand -hex 24 > password
    ```
 2. `node render-cloud-init.mjs <that-dir> > user-data.yaml`
-3. Create a Vultr instance (Ubuntu 24.04, plan `vc2-1c-0.5gb`, region `ewr`) with
+3. Create a Vultr instance (Debian 12 — Ubuntu 24.04 needs 1 GB RAM; plan `vc2-1c-0.5gb`, region `ewr`) with
    that file as user-data. It configures itself on first boot.
 4. Check `https://<ip>/health` answers `ok` (self-signed cert, so `curl -k`).
 

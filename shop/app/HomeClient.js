@@ -173,6 +173,68 @@ function useFeed(query, initial) {
   return { items, hasMore, loading, loadingMore, error, loadMore };
 }
 
+const ROW_SIZE = 10;
+
+/**
+ * A titled, sideways-scrolling row of one category's products. It fetches only
+ * once it comes near the screen, so thirteen rows don't fire thirteen searches
+ * (each with its own shipping quotes) the moment the page opens. A category
+ * that comes back empty or errors hides itself rather than leave a hole.
+ */
+function CategoryRow({ cat, onAdd, onViewAll }) {
+  const ref = useRef(null);
+  const [state, setState] = useState({ status: 'idle', items: [] });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    let cancelled = false;
+    const load = () => {
+      setState({ status: 'loading', items: [] });
+      fetch(`/api/products?keyword=${encodeURIComponent(cat.keyword)}&page=1&limit=${ROW_SIZE}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (cancelled) return;
+          const items = d?.products || [];
+          setState({ status: items.length ? 'ready' : 'empty', items });
+        })
+        .catch(() => !cancelled && setState({ status: 'empty', items: [] }));
+    };
+    if (typeof IntersectionObserver === 'undefined') {
+      load();
+      return () => { cancelled = true; };
+    }
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) {
+        io.disconnect();
+        load();
+      }
+    }, { rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => { cancelled = true; io.disconnect(); };
+  }, [cat.keyword]);
+
+  if (state.status === 'empty') return null;
+
+  return (
+    <section className="section cat-row" ref={ref} aria-label={cat.label}>
+      <div className="feed-head">
+        <h2 className="feed-title">{cat.label}</h2>
+        <button type="button" className="view-all" onClick={() => onViewAll(cat)}>
+          View All <span aria-hidden="true">›</span>
+        </button>
+      </div>
+      <div className="hscroll" aria-busy={state.status !== 'ready'}>
+        {state.status === 'ready'
+          ? state.items.map((p) => <ProductCard key={p.id} p={p} onAdd={onAdd} />)
+          : Array.from({ length: 5 }).map((_, i) => (
+            <div className="pc pc-skeleton" key={i}><div className="pc-media" /><i /><i /></div>
+          ))}
+      </div>
+    </section>
+  );
+}
+
 export default function HomeClient({ initial = null }) {
   // Real supplier product imagery for the category tiles, fetched once.
   const [catImages, setCatImages] = useState({});
@@ -335,6 +397,11 @@ export default function HomeClient({ initial = null }) {
           ))}
         </div>
       </section>
+
+      {/* ===== One product row per category ===== */}
+      {CATEGORIES.map((cat) => (
+        <CategoryRow key={cat.keyword} cat={cat} onAdd={addToCart} onViewAll={pickCategory} />
+      ))}
 
       {/* ===== Trust badges ===== */}
       <section className="section">

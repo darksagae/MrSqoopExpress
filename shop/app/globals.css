@@ -1507,6 +1507,23 @@ img { display: block; max-width: 100%; }
   .hscroll > .pc { flex-basis: 44vw; max-width: 210px; }
 }
 
+.cat-row { padding-top: 8px; padding-bottom: 8px; }
+.cat-row .feed-head { margin-bottom: 14px; }
+.view-all {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #2b59d9;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.view-all span { font-size: 20px; line-height: 1; margin-left: 2px; vertical-align: -1px; }
+.view-all:hover { text-decoration: underline; }
+@media (max-width: 640px) { .cat-row .feed-title { font-size: 19px; } }
+
 .pgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px 16px; }
 @media (max-width: 900px) { .pgrid { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; } }
 

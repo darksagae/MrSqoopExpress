@@ -631,10 +631,19 @@ function asArray(v) {
  */
 function freightCostUSD(o = {}) {
   if (o.free_shipping) return 0;
-  const cents = o.shipping_fee_cent ?? o.shippingFeeCent;
-  if (cents != null && cents !== '') {
-    const n = parseFloat(cents);
-    if (Number.isFinite(n)) return n / 100;
+  // The display string ("US $11.84") is the figure AliExpress shows its own
+  // shoppers. Prefer it: shipping_fee_cent is misnamed and arrives in whole
+  // currency units ("11.84"), not cents — dividing it by 100 under-charged
+  // every shipment by 100x.
+  const shown = o.shipping_fee_format ?? o.shippingFeeFormat;
+  if (shown) {
+    const n = parseFloat(String(shown).replace(/[^0-9.]/g, ''));
+    if (Number.isFinite(n)) return n;
+  }
+  const units = o.shipping_fee_cent ?? o.shippingFeeCent;
+  if (units != null && units !== '') {
+    const n = parseFloat(units);
+    if (Number.isFinite(n)) return n;
   }
   const amount =
     o.shipping_fee ?? o.shippingFee ?? o.shipping_amount ?? o.amount ?? o.fee_amount;

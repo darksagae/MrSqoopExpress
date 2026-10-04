@@ -784,11 +784,23 @@ img { display: block; max-width: 100%; }
    listing photo happens to have. */
 .cat-section { padding-bottom: 20px; }
 .cat-strip {
+  /* Two rows that scroll sideways; the next column peeks in to hint at more. */
+  --cat-w: 128px;
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(2, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: var(--cat-w);
   align-items: start;
   gap: 20px 14px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
 }
+.cat-strip::-webkit-scrollbar { display: none; }
+.cat-strip .cat-tile { scroll-snap-align: start; }
 .cat-tile {
   background: none;
   border: 0;
@@ -868,12 +880,12 @@ img { display: block; max-width: 100%; }
   .hero-disc { width: 84px; height: 84px; top: 0; left: 0; }
   .hero-disc em { font-size: 11px; }
 
-  .cat-strip { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .cat-strip { --cat-w: 104px; gap: 16px 12px; }
 }
 
 @media (max-width: 520px) {
   .hero-badges li { flex: 1 0 100%; justify-content: center; }
-  .cat-strip { grid-template-columns: repeat(3, 1fr); }
+  .cat-strip { --cat-w: calc((100vw - 32px - 36px) / 4.3); }
 }
 
 /* ===== Responsive ===== */

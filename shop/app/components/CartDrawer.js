@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useCart } from '../cart';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
@@ -8,11 +9,14 @@ const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 export default function CartDrawer() {
   const { items, setQty, total, open, setOpen } = useCart();
   const router = useRouter();
+  const { status } = useSession();
 
   const checkout = () => {
     if (!items.length) return;
     setOpen(false);
-    router.push('/checkout');
+    // Signed in: straight to checkout. Otherwise log in (or sign up from there)
+    // and come back to checkout with the cart intact.
+    router.push(status === 'authenticated' ? '/checkout' : '/login?next=/checkout');
   };
 
   return (

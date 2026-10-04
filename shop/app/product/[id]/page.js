@@ -2,7 +2,7 @@
 
 import PromoBanner from '../../components/PromoBanner';
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../../cart';
 
@@ -31,6 +31,7 @@ const deliveryWindow = () =>
 
 export default function ProductDetail() {
   const { id } = useParams();
+  const router = useRouter();
   const { add, setOpen } = useCart();
 
   const [product, setProduct] = useState(null);
@@ -91,10 +92,18 @@ export default function ProductDetail() {
         <strong>{error.code === 'NOT_DELIVERABLE' ? 'Not available in Uganda' : error.error || 'Could not load product'}</strong>
         {error.code === 'NOT_DELIVERABLE' && <p>This item can’t be delivered to Uganda, so we don’t sell it.</p>}
         {error.message && error.code !== 'NOT_DELIVERABLE' && <p>{error.message}</p>}
-        <p><Link href="/#shop" className="pd-back">← Back to shop</Link></p>
+        <p><button type="button" className="pd-back" onClick={() => (window.history.length > 1 ? router.back() : router.push('/'))}>← Back</button></p>
       </div>
     );
   }
+
+  // Back to wherever the shopper came from (their search results, a category
+  // row), with the list as they left it. Opened from a shared link there is no
+  // history to go back to, so fall back to the shop.
+  const goBack = () => {
+    if (window.history.length > 1) router.back();
+    else router.push('/');
+  };
 
   const price = variant?.priceUGX ?? product.priceUGX;
   const showRange = !variant && product.maxPriceUGX > product.priceUGX;
@@ -127,6 +136,7 @@ export default function ProductDetail() {
 
   return (
     <div className="pd">
+      <button type="button" className="pd-backbtn" onClick={goBack}>← Back to results</button>
       <div className="pd-breadcrumb">
         <Link href="/#shop">Shop</Link> <span>/</span> <span>{product.title.slice(0, 40)}…</span>
       </div>

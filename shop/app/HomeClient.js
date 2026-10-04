@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCart } from './cart';
 import { CATEGORIES } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
@@ -23,6 +23,14 @@ function SearchIcon() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
       <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.5" y2="16.5" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15.5 14" />
     </svg>
   );
 }
@@ -176,6 +184,19 @@ function useFeed(query, initial) {
 
 const ROW_SIZE = 10;
 
+// Recent searches, remembered on this device.
+const RECENT_KEY = 'mse_recent_searches';
+const RECENT_MAX = 8;
+function readRecent() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, RECENT_MAX) : [];
+  } catch { return []; }
+}
+function writeRecent(list) {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* storage blocked */ }
+}
+
 /**
  * A titled, sideways-scrolling row of one category's products. It fetches only
  * once it comes near the screen, so thirteen rows don't fire thirteen searches
@@ -241,9 +262,39 @@ export default function HomeClient({ initial = null }) {
   const [catImages, setCatImages] = useState({});
   // keyword is what is typed; query is what was submitted. Empty query means
   // the default view: whatever AliExpress ranks as best selling.
-  const [keyword, setKeyword] = useState('');
-  const [query, setQuery] = useState('');
-  const feed = useFeed(query, initial);
+  // The submitted search lives in the URL (/?q=shoes) rather than in memory, so
+  // opening a product and pressing Back returns to the same results.
+  const params = useSearchParams();
+  const query = (params.get('q') || '').trim();
+  const [keyword, setKeyword] = useState(query);
+  const feed = useFeed(query, query ? null : initial);
+  const [recent, setRecent] = useState([]);
+  const [focused, setFocused] = useState(false);
+  const scrollRestored = useRef(false);
+
+  useEffect(() => { setRecent(readRecent()); }, []);
+  useEffect(() => { setKeyword(query); }, [query]);
+
+  const remember = (q) => {
+    const next = [q, ...readRecent().filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, RECENT_MAX);
+    writeRecent(next);
+    setRecent(next);
+  };
+  const forget = (q) => {
+    const next = readRecent().filter((x) => x !== q);
+    writeRecent(next);
+    setRecent(next);
+  };
+  const clearRecent = () => { writeRecent([]); setRecent([]); };
+
+  const runSearch = (q) => {
+    const clean = q.trim();
+    if (clean) remember(clean);
+    setKeyword(clean);
+    setFocused(false);
+    scrollRestored.current = true; // a new search starts at the top
+    router.push(clean ? `/?q=${encodeURIComponent(clean)}` : '/', { scroll: false });
+  };
   const rowRef = useRef(null);
 
   const { add, setOpen } = useCart();
@@ -287,12 +338,37 @@ export default function HomeClient({ initial = null }) {
   // Searching for nothing goes back to the best picks.
   const submitSearch = (e) => {
     e.preventDefault();
-    setQuery(keyword.trim());
+    runSearch(keyword);
   };
 
+  // Remember where the shopper was when they opened a product, and put them back
+  // there when they return, once the list has loaded.
+  useEffect(() => {
+    const onClick = (e) => {
+      const a = e.target.closest?.('a[href^="/product/"]');
+      if (!a) return;
+      try {
+        sessionStorage.setItem('mse_return', JSON.stringify({ q: query, y: window.scrollY, at: Date.now() }));
+      } catch { /* storage blocked */ }
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [query]);
+
+  useEffect(() => {
+    if (scrollRestored.current || feed.loading || feed.items.length === 0) return;
+    scrollRestored.current = true;
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('mse_return') || 'null');
+      sessionStorage.removeItem('mse_return');
+      if (saved && saved.q === query && Date.now() - saved.at < 30 * 60 * 1000) {
+        requestAnimationFrame(() => window.scrollTo(0, saved.y));
+      }
+    } catch { /* ignore */ }
+  }, [feed.loading, feed.items.length, query]);
+
   const pickCategory = (cat) => {
-    setKeyword(cat.keyword);
-    setQuery(cat.keyword);
+    runSearch(cat.keyword);
     document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -300,6 +376,8 @@ export default function HomeClient({ initial = null }) {
     rowRef.current?.scrollBy({ left: dir * rowRef.current.clientWidth * 0.8, behavior: 'smooth' });
 
   const { items, hasMore, loading, loadingMore, error, loadMore } = feed;
+  const needle = keyword.trim().toLowerCase();
+  const shownRecent = recent.filter((r) => !needle || (r.toLowerCase().includes(needle) && r.toLowerCase() !== needle));
 
   return (
     <>
@@ -314,8 +392,27 @@ export default function HomeClient({ initial = null }) {
             placeholder='Search "Shoes"'
             aria-label="Search products"
             enterKeyHint="search"
+            autoComplete="off"
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 150)}
           />
         </form>
+        {focused && shownRecent.length > 0 && (
+          <div className="recent" role="listbox" aria-label="Recent searches">
+            <div className="recent-head">
+              <span>Recent searches</span>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={clearRecent}>Clear all</button>
+            </div>
+            {shownRecent.map((r) => (
+              <div className="recent-row" key={r}>
+                <button type="button" className="recent-item" onMouseDown={(e) => e.preventDefault()} onClick={() => runSearch(r)}>
+                  <ClockIcon /> <span>{r}</span>
+                </button>
+                <button type="button" className="recent-x" aria-label={`Remove ${r}`} onMouseDown={(e) => e.preventDefault()} onClick={() => forget(r)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="section promo-wrap"><PromoBanner /></div>

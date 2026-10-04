@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import HomeClient from './HomeClient';
 import { aliexpressDS } from '@/lib/aliexpress';
 import { getBestPicks } from '@/lib/best-picks';
@@ -28,5 +29,10 @@ async function loadInitial() {
 }
 
 export default async function Home() {
-  return <HomeClient initial={await loadInitial()} />;
+  // HomeClient reads the search from the URL, which needs a Suspense boundary.
+  return (
+    <Suspense fallback={null}>
+      <HomeClient initial={await loadInitial()} />
+    </Suspense>
+  );
 }

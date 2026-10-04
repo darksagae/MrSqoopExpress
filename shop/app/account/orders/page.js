@@ -28,14 +28,17 @@ export default function MyOrdersPage() {
       <div className="orders-page">
         <h1>My orders</h1>
         <p className="orders-empty">Log in to see your orders.</p>
-        <Link href="/login" className="btn-dark orders-btn">Log in</Link>
+        <Link href="/login?next=/account/orders" className="btn-dark orders-btn">Log in</Link>
+        <p className="orders-empty" style={{ marginTop: 18 }}>
+          Ordered without an account? <a href="https://order.mrsqoopexpress.com" target="_blank" rel="noopener noreferrer">Track with your order number</a>.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="orders-page">
-      <h1>My orders</h1>
+      <h1>Track my orders</h1>
       {error && <p className="orders-empty">{error}</p>}
       {!error && !orders && <p className="orders-empty">Loading…</p>}
       {orders && orders.length === 0 && (
@@ -45,7 +48,7 @@ export default function MyOrdersPage() {
         </>
       )}
       {orders?.map((o) => {
-        const current = [...o.steps].reverse().find((s) => s.done);
+        const current = [...o.steps].reverse().find((st) => st.done);
         return (
           <article className="order-card" key={o.id}>
             <header>
@@ -63,6 +66,17 @@ export default function MyOrdersPage() {
                 {o.items.map((i) => `${i.qty > 1 ? i.qty + '× ' : ''}${i.name}`).join(', ')}
               </span>
             </div>
+            <details className="order-steps">
+              <summary>Track this order{o.expectedDelivery ? ` · expected ${o.expectedDelivery}` : ''}</summary>
+              <ol>
+                {o.steps.map((st) => (
+                  <li key={st.key} className={st.done ? 'done' : ''}>
+                    <span>{st.label}</span>
+                    {st.at && <time>{when(st.at)}</time>}
+                  </li>
+                ))}
+              </ol>
+            </details>
             <footer>
               <strong>{fmt(o.amountUGX)}</strong>
               {!o.cancelled && current && <span>{current.label}</span>}

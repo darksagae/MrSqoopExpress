@@ -20,7 +20,7 @@ export default function SiteHeader() {
       <header className="header">
         <nav className="nav-left">
           <Link href="/#shop" className="active">Shop Now</Link>
-          <a href="https://order.mrsqoopexpress.com" target="_blank" rel="noopener noreferrer">Track Order</a>
+          <Link href="/account/orders">Track Order</Link>
         </nav>
         <Link href="/" className="logo">
           <span className="logo-title">MrSqoopExpress</span>

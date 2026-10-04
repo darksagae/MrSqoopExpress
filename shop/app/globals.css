@@ -1650,3 +1650,4 @@ img { display: block; max-width: 100%; }
 .promo-code strong { letter-spacing: .5px; }
 .promo-copy { font-size: 12px; font-weight: 600; color: #2b59d9; }
 .promo-pd { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: #fff8dc; font-size: 15px; }
+.promo-cond { flex-basis: 100%; font-size: 13px; font-weight: 400; color: #666; }

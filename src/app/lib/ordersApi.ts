@@ -196,7 +196,7 @@ export { ApiError }
 export interface ShopSettings {
   rate: number
   handlingPercent: number
-  promo: { enabled: boolean; code: string; text: string }
+  promo: { enabled: boolean; code: string; text: string; minOrder: number }
 }
 
 export async function fetchShopSettings(): Promise<ShopSettings> {

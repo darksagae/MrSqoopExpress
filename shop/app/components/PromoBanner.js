@@ -40,6 +40,11 @@ export default function PromoBanner({ className = '' }) {
           <span className="promo-copy">{copied ? 'Copied' : 'Copy'}</span>
         </button>
       )}
+      {promo.minOrder > 0 && (
+        <span className="promo-cond">
+          Valid on orders over UGX {Number(promo.minOrder).toLocaleString('en-US')}
+        </span>
+      )}
     </div>
   );
 }

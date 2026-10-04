@@ -90,9 +90,20 @@ export function ShopSettings() {
                 className={input}
               />
             </div>
+            <label className="grid gap-1 text-sm text-neutral-400">
+              Condition: minimum order total (UGX, 0 = no condition)
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={form.promo.minOrder}
+                onChange={(e) => setForm({ ...form, promo: { ...form.promo, minOrder: Number(e.target.value) } })}
+                className={input}
+              />
+            </label>
             <p className="text-xs text-neutral-500">
               Shown on the home page and under the shipping box on product pages. The banner only displays the code;
-              it does not discount the total.
+              it does not discount the total. With a minimum set, it adds “Valid on orders over UGX …” underneath.
             </p>
           </div>
 

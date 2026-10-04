@@ -18,7 +18,7 @@ const DEFAULTS = {
   rate: num(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE, 3700),
   handlingPercent: num(process.env.NEXT_PUBLIC_HANDLING_FEE_PERCENT, 38),
   markupPercent: num(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE, 0),
-  promo: { enabled: false, code: '', text: '' },
+  promo: { enabled: false, code: '', text: '', minOrder: 0 },
 };
 
 let current = structuredClone(DEFAULTS);
@@ -64,7 +64,11 @@ export function validate(input = {}) {
     const text = String(p.text ?? '').trim();
     if (code && !/^[A-Z0-9_.-]{2,30}$/.test(code)) errors.push('Promo code can only use letters, numbers, - _ . (2–30 characters).');
     else if (text.length > 120) errors.push('Promo text can be at most 120 characters.');
-    else out.promo = { enabled: Boolean(p.enabled) && Boolean(code || text), code, text };
+    else {
+      const min = Number(p.minOrder ?? 0);
+      if (!Number.isFinite(min) || min < 0 || min > 100_000_000) errors.push('Minimum order must be a positive amount in UGX (or 0 for none).');
+      else out.promo = { enabled: Boolean(p.enabled) && Boolean(code || text), code, text, minOrder: Math.round(min) };
+    }
   }
   return { values: out, errors };
 }

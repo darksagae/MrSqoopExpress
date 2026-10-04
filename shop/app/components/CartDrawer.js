@@ -7,7 +7,7 @@ import { useCart } from '../cart';
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 
 export default function CartDrawer() {
-  const { items, setQty, total, open, setOpen } = useCart();
+  const { items, setQty, subtotal, shipping, shippingKnown, handling, total, open, setOpen } = useCart();
   const router = useRouter();
   const { status } = useSession();
 
@@ -49,6 +49,16 @@ export default function CartDrawer() {
           </div>
         )}
         <div className="cart-foot">
+          {items.length > 0 && (
+            <div className="cart-breakdown">
+              <div><span>Items</span><span>{fmt(subtotal)}</span></div>
+              <div>
+                <span>Shipping to Uganda</span>
+                <span>{!shippingKnown ? 'Calculated at checkout' : shipping > 0 ? fmt(shipping) : 'Free'}</span>
+              </div>
+              <div><span>Handling fee</span><span>{fmt(handling)}</span></div>
+            </div>
+          )}
           <div className="cart-total-row">
             <span>Total</span>
             <span>{fmt(total)}</span>

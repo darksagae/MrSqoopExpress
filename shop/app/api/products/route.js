@@ -88,8 +88,11 @@ export async function GET(request) {
     // Only a definite refusal from AliExpress removes a product. An unknown
     // quote means the lookup failed, not that the seller won't ship — dropping
     // those would hide perfectly sellable stock every time a request timed out.
+    // Only products AliExpress has confirmed it will deliver to Uganda are listed.
+    // A shipping lookup that failed or timed out counts as not confirmed: showing
+    // those let items through that turn out to be undeliverable once opened.
     const shown = dropUndeliverable
-      ? priced.filter((p) => p.shipping.deliverable !== false).slice(0, limit)
+      ? priced.filter((p) => p.shipping.deliverable === true).slice(0, limit)
       : priced;
 
     return NextResponse.json({

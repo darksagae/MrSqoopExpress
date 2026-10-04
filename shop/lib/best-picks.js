@@ -9,11 +9,12 @@ import { quoteFreightForAll, priceProducts } from './catalog.js';
  */
 export async function getBestPicks({ page = 1, limit = 20 } = {}) {
   await loadSettings();
-  // A little extra, because undeliverable products are dropped afterwards.
+  // A little extra, because anything not confirmed deliverable to Uganda is
+  // dropped afterwards (including shipping lookups that failed or timed out).
   const { source, products } = await getTrending({ page, pageSize: Math.ceil(limit * 1.4) });
   const freights = await quoteFreightForAll(products);
   const priced = priceProducts(products, freights)
-    .filter((p) => p.shipping.deliverable !== false)
+    .filter((p) => p.shipping.deliverable === true)
     .slice(0, limit);
   return { source, products: priced, hasMore: products.length > 0 };
 }

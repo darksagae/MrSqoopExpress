@@ -87,8 +87,9 @@ export default function ProductDetail() {
   if (error) {
     return (
       <div className="pd-status error">
-        <strong>{error.error || 'Could not load product'}</strong>
-        {error.message && <p>{error.message}</p>}
+        <strong>{error.code === 'NOT_DELIVERABLE' ? 'Not available in Uganda' : error.error || 'Could not load product'}</strong>
+        {error.code === 'NOT_DELIVERABLE' && <p>This item can’t be delivered to Uganda, so we don’t sell it.</p>}
+        {error.message && error.code !== 'NOT_DELIVERABLE' && <p>{error.message}</p>}
         <p><Link href="/#shop" className="pd-back">← Back to shop</Link></p>
       </div>
     );
@@ -191,14 +192,14 @@ export default function ProductDetail() {
             {shipLoading
               ? 'Checking shipping…'
               : ship?.deliverable === false
-              ? 'Not available for delivery to'
+              ? 'Not available for delivery'
               : !ship?.known
               ? 'Shipping calculated at checkout'
               : ship.free
                 ? '✓ Express shipping'
                 : `Shipping ${fmt(ship.costUGX)}`}
             {!shipLoading && ship?.destination ? ` to ${ship.destination}` : ''}
-            {!shipLoading && deliveryText ? ` · arrives in ${deliveryText}` : ''}
+            {!shipLoading && ship?.deliverable !== false && deliveryText ? ` · arrives in ${deliveryText}` : ''}
           </div>
 
           <div className="pd-buy">

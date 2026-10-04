@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
 import { itemUGX as toUGX, shipUGX } from '@/lib/pricing';
+import { quoteFreightForAll } from '@/lib/catalog';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
@@ -38,25 +39,33 @@ export async function GET(request, { params }) {
   try {
     const d = await aliexpressDS.getProduct({ productId: id });
 
-    // Quote the SKU actually being viewed, falling back to the first variant.
-    const quoteSku =
-      (requestedSku && d.variants.some((v) => v.skuId === requestedSku) && requestedSku) ||
-      d.variants[0]?.skuId;
+    // Shipping differs per option: one colour can be sent to Uganda while another
+    // is refused. So every option is quoted, and the ones AliExpress will not
+    // deliver are dropped — the shopper is only ever offered what can arrive.
+    // (Quotes are cached, so switching options afterwards is instant.)
+    const candidates = d.variants.slice(0, 24);
+    const quotes = await quoteFreightForAll(candidates.map((v) => ({ id: d.id, skuId: v.skuId })));
+    const refused = (q) => q?.quoted === true && q?.deliverable === false;
+    const sellable = candidates.map((v, i) => ({ v, q: quotes[i] })).filter(({ q }) => !refused(q));
 
-    let freight = null;
-    if (quoteSku) {
-      try {
-        freight = await aliexpressDS.queryFreight({ productId: d.id, skuId: quoteSku });
-      } catch (e) {
-        console.warn('Freight query failed:', e.message);
-      }
+    if (candidates.length && !sellable.length) {
+      return NextResponse.json(
+        { error: 'This product is not available for delivery to Uganda.', code: 'NOT_DELIVERABLE' },
+        { status: 404 }
+      );
     }
+
+    // Quote the option being viewed, falling back to the first sellable one.
+    const picked =
+      sellable.find(({ v }) => v.skuId === requestedSku) || sellable[0] || null;
+    const quoteSku = picked?.v.skuId;
+    const freight = picked?.q ?? null;
 
     // Unknown stays unknown: a shipment AliExpress never priced must not be
     // presented as free.
     const shipUSD = freight?.freeShipping ? 0 : freight?.shippingCostUSD ?? null;
 
-    const variants = d.variants.map((v) => ({
+    const variants = sellable.map(({ v }) => v).map((v) => ({
       skuId: v.skuId,
       label: v.label,
       image: v.image,

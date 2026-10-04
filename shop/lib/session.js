@@ -1,10 +1,8 @@
 import { auth } from '@/auth';
 
 /**
- * The signed-in customer, or null for a guest.
- *
- * Never throws: an auth hiccup (missing secret, bad cookie) must not stop
- * someone from paying. They simply check out as a guest.
+ * The signed-in customer, or null. Never throws: a bad cookie or auth
+ * misconfiguration reads as "not signed in" instead of a 500.
  */
 export async function signedInUser() {
   try {

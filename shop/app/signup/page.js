@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
+import { nextFromUrl } from '@/lib/next-path';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -58,7 +59,7 @@ export default function SignupPage() {
       // Verified — sign them straight in with the credentials they just used.
       const login = await signIn('credentials', { email, password, redirect: false });
       if (login?.error) { router.push('/login?verified=1'); return; }
-      router.push('/');
+      router.push(nextFromUrl());
       router.refresh();
     } catch (err) {
       setCodeError('Something went wrong. Please try again. ' + err.message);
@@ -129,7 +130,7 @@ export default function SignupPage() {
         <h1 className="auth-title">Create your account</h1>
         <p className="auth-sub">Join MrSqoopExpress to track your orders.</p>
 
-        <button className="auth-google" onClick={() => signIn('google', { callbackUrl: '/' })}>
+        <button className="auth-google" onClick={() => signIn('google', { callbackUrl: nextFromUrl() })}>
           <GoogleIcon /> Continue with Google
         </button>
 
@@ -156,7 +157,7 @@ export default function SignupPage() {
           </button>
         </form>
 
-        <p className="auth-alt">Already have an account? <Link href="/login">Log in</Link></p>
+        <p className="auth-alt">Already have an account? <Link href={`/login${nextQuery()}`}>Log in</Link></p>
       </div>
     </div>
   );
@@ -171,4 +172,9 @@ function GoogleIcon() {
       <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
     </svg>
   );
+}
+
+function nextQuery() {
+  const n = nextFromUrl('');
+  return n ? `?next=${encodeURIComponent(n)}` : '';
 }

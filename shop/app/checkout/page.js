@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useCart } from '../cart';
 import { CUSTOMER_DESTINATION_LABEL } from '@/lib/shipping-destination';
@@ -29,6 +30,12 @@ export default function CheckoutPage() {
   const { items, subtotal, shipping, shippingKnown, handling, total, clear, reprice } = useCart();
 
   const router = useRouter();
+  const { data: session, status: authStatus } = useSession();
+
+  // Checking out needs an account, so orders always belong to someone.
+  useEffect(() => {
+    if (authStatus === 'unauthenticated') router.replace('/login?next=/checkout');
+  }, [authStatus, router]);
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -40,6 +47,11 @@ export default function CheckoutPage() {
   // Provider outcome once the customer acts on the prompt: PENDING until they
   // approve, then SUCCESSFUL / FAILED / REJECTED, or TIMEOUT if we stop waiting.
   const [payStatus, setPayStatus] = useState(null);
+
+  // Start the name from the account, still editable (the payer may differ).
+  useEffect(() => {
+    if (session?.user?.name) setName((n) => n || session.user.name);
+  }, [session]);
 
   // Auto-detect network from the phone number until the user picks manually.
   useEffect(() => {
@@ -221,6 +233,10 @@ export default function CheckoutPage() {
         </div>
       </div>
     );
+  }
+
+  if (authStatus !== 'authenticated') {
+    return <div className="co-empty"><p>{authStatus === 'loading' ? 'Loading…' : 'Redirecting to log in…'}</p></div>;
   }
 
   if (!items.length) {

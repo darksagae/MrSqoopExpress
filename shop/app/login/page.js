@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
+import { nextFromUrl } from '@/lib/next-path';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,7 +38,7 @@ export default function LoginPage() {
         setShowResend(true);
         return;
       }
-      router.push('/');
+      router.push(nextFromUrl());
       router.refresh();
     } catch (err) {
       setError('Something went wrong. Please try again. ' + err.message);
@@ -74,7 +75,7 @@ export default function LoginPage() {
       // Confirmed — sign in now.
       const login = await signIn('credentials', { email, password, redirect: false });
       if (login?.error) { setCodeMsg('Confirmed — please log in.'); return; }
-      router.push('/');
+      router.push(nextFromUrl());
       router.refresh();
     } catch {
       setCodeMsg('Could not confirm right now. Please try again.');
@@ -89,7 +90,7 @@ export default function LoginPage() {
 
         {banner && <div className={banner.ok ? 'auth-success' : 'auth-error'}>{banner.text}</div>}
 
-        <button className="auth-google" onClick={() => signIn('google', { callbackUrl: '/' })}>
+        <button className="auth-google" onClick={() => signIn('google', { callbackUrl: nextFromUrl() })}>
           <GoogleIcon /> Continue with Google
         </button>
 
@@ -134,7 +135,7 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="auth-alt">New here? <Link href="/signup">Create an account</Link></p>
+        <p className="auth-alt">New here? <Link href={`/signup${nextQuery()}`}>Create an account</Link></p>
       </div>
     </div>
   );
@@ -149,4 +150,9 @@ function GoogleIcon() {
       <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.47.9 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
     </svg>
   );
+}
+
+function nextQuery() {
+  const n = nextFromUrl('');
+  return n ? `?next=${encodeURIComponent(n)}` : '';
 }

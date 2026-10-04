@@ -20,6 +20,12 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
+  // Checkout needs an account. Enforced here, not just in the page.
+  const account = await signedInUser();
+  if (!account) {
+    return NextResponse.json({ error: 'Please log in to place your order.', code: 'LOGIN_REQUIRED' }, { status: 401 });
+  }
+
   const { customer = {}, items = [], total } = body;
 
   if (!customer.name || !customer.phone) {
@@ -41,9 +47,6 @@ export async function POST(request) {
   const priced = await confirmCartTotal(items, total);
   if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
   const { lines, total: amountUGX } = priced;
-
-  // Signed in? Tie the order to the account. Guests can still check out.
-  const account = await signedInUser();
 
   const orderId = newOrderId();
   const { endpoint, fields, transactionUuid } = buildPaymentRequest({ orderId, amountUGX });

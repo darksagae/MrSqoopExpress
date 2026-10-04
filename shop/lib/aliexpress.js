@@ -356,8 +356,8 @@ export class AliExpressDS {
     const refused = result.success === false;
     const reason = refused ? result.msg || `code ${result.code}` : null;
 
-    // Prefer a free option; otherwise pick the cheapest paid option and fold
-    // its cost into the product price so the customer never sees a shipping fee.
+    // Prefer a free option; otherwise the cheapest paid option. The cost is shown
+    // to the customer as shipping to Uganda, exactly as AliExpress quoted it.
     const free = opts.find((o) => o.free_shipping) || null;
     const priced = opts
       .map((o) => ({ opt: o, cost: freightCostUSD(o) }))

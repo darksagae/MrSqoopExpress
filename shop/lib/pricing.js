@@ -44,7 +44,9 @@ async function priceLine(item) {
     );
   }
 
-  const freight = await aliexpressDS.queryFreight({ productId, skuId: variant.skuId });
+  // Quoted for the quantity actually being bought: AliExpress prices freight by
+  // weight and quantity, so one unit's quote times N is not what it will bill.
+  const freight = await aliexpressDS.queryFreight({ productId, skuId: variant.skuId, quantity: qty });
   if (!freight.deliverable) {
     throw new CartProblem(`"${label}" can't be delivered to Uganda. Please remove it from your cart.`);
   }
@@ -62,7 +64,9 @@ async function priceLine(item) {
     img: item.img || variant.image || d.images?.[0] || '',
     qty,
     price,
-    shipUGX: shipUGX(shipUSD),
+    // Stored per unit (the cart and the admin multiply by qty), derived from the
+    // exact total AliExpress quoted for this quantity.
+    shipUGX: Math.round(shipUGX(shipUSD) / qty),
     handlingUGX: handlingFee(price),
   };
 }

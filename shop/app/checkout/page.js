@@ -48,6 +48,30 @@ export default function CheckoutPage() {
   // approve, then SUCCESSFUL / FAILED / REJECTED, or TIMEOUT if we stop waiting.
   const [payStatus, setPayStatus] = useState(null);
 
+  // Get the exact AliExpress price and Uganda shipping for the quantities in the
+  // basket before the customer pays, so the total they see is the total charged.
+  const quoteKey = items.map((c) => `${c.id}:${c.skuId}:${c.qty}`).join('|');
+  const [quoteError, setQuoteError] = useState(null);
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !items.length) return undefined;
+    let stale = false;
+    setQuoteError(null);
+    fetch('/api/cart/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: items.map((c) => ({ id: c.id, skuId: c.skuId, qty: c.qty, name: c.name, img: c.img })) }),
+    })
+      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (stale) return;
+        if (ok) reprice(d.items);
+        else setQuoteError(d.error);
+      })
+      .catch(() => {});
+    return () => { stale = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteKey, authStatus]);
+
   // Start the name from the account, still editable (the payer may differ).
   useEffect(() => {
     if (session?.user?.name) setName((n) => n || session.user.name);
@@ -254,6 +278,7 @@ export default function CheckoutPage() {
       <div className="co-grid">
         {/* Payment form */}
         <form className="co-form" onSubmit={submit}>
+          {quoteError && <div className="co-error">{quoteError}</div>}
           <h2 className="co-h2">Your details</h2>
 
           <label className="co-field">

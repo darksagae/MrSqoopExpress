@@ -1522,7 +1522,25 @@ img { display: block; max-width: 100%; }
 }
 .view-all span { font-size: 20px; line-height: 1; margin-left: 2px; vertical-align: -1px; }
 .view-all:hover { text-decoration: underline; }
-@media (max-width: 640px) { .cat-row .feed-title { font-size: 19px; } }
+/* Category rows use a compact card, like a shelf of tiles: about three and a
+   bit per screen on a phone, with only the essentials (photo, name, price). */
+.cat-row .hscroll { gap: 12px; }
+.cat-row .hscroll > .pc { flex: 0 0 160px; }
+.cat-row .pc-media { border-radius: 14px; }
+.cat-row .pc-img { padding: 6px; }
+.cat-row .pc-add { width: 30px; height: 30px; right: 6px; bottom: 6px; border-radius: 9px; font-size: 20px; padding-bottom: 2px; }
+.cat-row .pc-title { margin-top: 8px; font-size: 13px; }
+.cat-row .pc-price { margin-top: 4px; gap: 2px 6px; }
+.cat-row .pc-price strong { font-size: 14px; }
+.cat-row .pc-meta,
+.cat-row .pc-price s,
+.cat-row .pc-ship { display: none; }
+.cat-row .pc-off { font-size: 12px; }
+@media (max-width: 640px) {
+  .cat-row .feed-title { font-size: 19px; }
+  .cat-row .hscroll { gap: 10px; }
+  .cat-row .hscroll > .pc { flex-basis: calc((100vw - 18px - 30px) / 3.3); max-width: 160px; }
+}
 
 .pgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px 16px; }
 @media (max-width: 900px) { .pgrid { grid-template-columns: repeat(2, 1fr); gap: 20px 12px; } }

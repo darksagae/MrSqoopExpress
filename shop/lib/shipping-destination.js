@@ -1,3 +1,5 @@
+import { currentSettings } from './settings.js';
+
 /**
  * Two countries are involved in every order, and they answer different
  * questions.
@@ -38,19 +40,17 @@ export const WAREHOUSE = {
 export const WAREHOUSE_LABEL = 'Deira, Dubai — United Arab Emirates';
 
 /**
- * Handling fee, charged as a percentage of the product price.
+ * Handling fee, charged as a percentage of the product price. The percentage is
+ * set from the admin (see settings.js).
  *
  * This is the shop's own charge for taking the goods the rest of the way, and
  * it is shown to the customer as its own line rather than folded into the
  * product price — the product price is meant to match AliExpress exactly, so
  * burying a margin inside it would make that claim false.
  */
-export const HANDLING_FEE_PERCENT = (() => {
-  const n = Number(process.env.NEXT_PUBLIC_HANDLING_FEE_PERCENT ?? '38');
-  return Number.isFinite(n) && n >= 0 ? n : 38;
-})();
+export const handlingPercent = () => currentSettings().handlingPercent;
 
 /** Handling fee for a given product price, in the same currency. */
 export function handlingFee(amount) {
-  return Math.round((Number(amount) || 0) * (HANDLING_FEE_PERCENT / 100));
+  return Math.round((Number(amount) || 0) * (handlingPercent() / 100));
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useCart } from './cart';
 import { CATEGORIES } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
+import PromoBanner from './components/PromoBanner';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
@@ -316,6 +317,8 @@ export default function HomeClient({ initial = null }) {
           />
         </form>
       </div>
+
+      <div className="section promo-wrap"><PromoBanner /></div>
 
       {/* ===== Best picks / search results ===== */}
       <section className="section feed" id="shop">

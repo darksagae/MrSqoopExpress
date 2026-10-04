@@ -5,9 +5,10 @@ import { quoteFreightForAll } from '@/lib/catalog';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
-  HANDLING_FEE_PERCENT,
   handlingFee,
+  handlingPercent,
 } from '@/lib/shipping-destination';
+import { loadSettings, currentSettings } from '@/lib/settings';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
@@ -25,6 +26,7 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * variant rather than showing one quote for all of them.
  */
 export async function GET(request, { params }) {
+  await loadSettings();
   const { id } = await params;
   const { searchParams } = new URL(request.url);
   const requestedSku = searchParams.get('skuId');
@@ -110,7 +112,7 @@ export async function GET(request, { params }) {
           destination: CUSTOMER_DESTINATION_LABEL,
         },
         destination: { ...CUSTOMER_DESTINATION, label: CUSTOMER_DESTINATION_LABEL },
-        handlingFeePercent: HANDLING_FEE_PERCENT,
+        handlingFeePercent: handlingPercent(),
       },
     });
   } catch (error) {

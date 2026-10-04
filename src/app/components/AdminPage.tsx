@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { Logo } from './Logo'
 import { AdminLogin } from './AdminLogin'
 import { ResetPassword } from './ResetPassword'
+import { ShopSettings } from './ShopSettings'
 import { adminLogout, isAdminLoggedIn } from '../lib/adminAuth'
 import {
   advanceOrder,
@@ -701,6 +702,8 @@ export function AdminPage() {
             </div>
           )}
         </section>
+
+        <ShopSettings />
 
         <section className="mt-8 rounded-2xl border border-neutral-800 bg-neutral-950 p-5">
           <h2 className="text-lg font-bold text-white">Create Order</h2>

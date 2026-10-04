@@ -1,5 +1,6 @@
 'use client';
 
+import PromoBanner from '../../components/PromoBanner';
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -201,6 +202,8 @@ export default function ProductDetail() {
             {!shipLoading && ship?.destination ? ` to ${ship.destination}` : ''}
             {!shipLoading && ship?.deliverable !== false && deliveryText ? ` · arrives in ${deliveryText}` : ''}
           </div>
+
+          <PromoBanner className="promo-pd" />
 
           <div className="pd-buy">
             <div className="pd-qty">

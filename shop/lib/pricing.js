@@ -1,17 +1,20 @@
 import { aliexpressDS } from './aliexpress.js';
 import { handlingFee } from './shipping-destination.js';
+import { currentSettings, loadSettings } from './settings.js';
 
 /**
  * The one place USD supplier prices become UGX. The catalogue, the product
  * page and checkout all use these, so the price a shopper sees is the price
  * the server charges.
  */
-const MARKUP = parseFloat(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE || '0');
-const RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE || '3700');
-
-export const itemUGX = (usd) => Math.round((Number(usd) || 0) * (1 + MARKUP / 100) * RATE);
+// Rate and markup come from the admin-editable settings (see settings.js), read
+// at call time so a change applies without a redeploy.
+export const itemUGX = (usd) => {
+  const { rate, markupPercent } = currentSettings();
+  return Math.round((Number(usd) || 0) * (1 + markupPercent / 100) * rate);
+};
 // Shipping is a pass-through of what the supplier bills, so no markup.
-export const shipUGX = (usd) => Math.round((Number(usd) || 0) * RATE);
+export const shipUGX = (usd) => Math.round((Number(usd) || 0) * currentSettings().rate);
 
 const MAX_LINES = 30;
 const MAX_QTY = 50;
@@ -79,6 +82,7 @@ async function priceLine(item) {
  * @returns {{ lines: object[], total: number }}
  */
 export async function priceCart(items) {
+  await loadSettings();
   if (!Array.isArray(items) || !items.length) throw new CartProblem('Your cart is empty.');
   if (items.length > MAX_LINES) throw new CartProblem('Your cart has too many items for one order.');
 

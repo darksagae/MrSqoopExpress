@@ -4,14 +4,13 @@ import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
-  HANDLING_FEE_PERCENT,
+  handlingPercent,
 } from '@/lib/shipping-destination';
+import { loadSettings, currentSettings } from '@/lib/settings';
 
 // Prices are shown exactly as AliExpress lists them, so there is no markup by
 // default. The variable stays so a margin can be reintroduced deliberately
 // rather than by forgetting to remove one.
-const MARKUP_PERCENTAGE = parseFloat(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE || '0');
-const USD_TO_UGX_RATE = parseFloat(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE || '3700');
 
 // The same searches repeat constantly (every category tile, every popular term),
 // and each uncached one costs a search plus a shipping quote per product. Serve
@@ -37,6 +36,7 @@ const MAX_PAGE_SIZE = 50;
  * unavailable — the shop only sells what it can actually deliver.
  */
 export async function GET(request) {
+  await loadSettings();
   const { searchParams } = new URL(request.url);
   const keyword = searchParams.get('keyword') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
@@ -107,10 +107,10 @@ export async function GET(request) {
       removedUndeliverable: priced.filter((p) => p.shipping.deliverable === false).length,
       unknownShippingCount: priced.filter((p) => p.shipping.deliverable === null).length,
       keyword,
-      markupPercentage: MARKUP_PERCENTAGE,
-      exchangeRate: USD_TO_UGX_RATE,
+      markupPercentage: currentSettings().markupPercent,
+      exchangeRate: currentSettings().rate,
       destination: { ...CUSTOMER_DESTINATION, label: CUSTOMER_DESTINATION_LABEL },
-      handlingFeePercent: HANDLING_FEE_PERCENT,
+      handlingFeePercent: handlingPercent(),
       products: shown,
     }, { headers: { 'Cache-Control': SEARCH_CACHE } });
   } catch (error) {

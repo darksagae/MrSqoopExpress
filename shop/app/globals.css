@@ -1639,3 +1639,14 @@ img { display: block; max-width: 100%; }
 
 .cart-breakdown { display: grid; gap: 6px; padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid #eee; font-size: 14px; color: #555; }
 .cart-breakdown div { display: flex; justify-content: space-between; gap: 12px; }
+
+/* ===== Promo banner (set from the admin) ===== */
+.promo-wrap { padding-top: 14px; padding-bottom: 0; }
+.promo-wrap:empty { display: none; }
+.promo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 16px; font-weight: 700; color: #111; }
+.promo-text { line-height: 1.3; }
+.promo-sep { color: #bbb; font-weight: 400; }
+.promo-code { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px dashed #1a1a1a; border-radius: 8px; background: #fffbe6; font: inherit; font-size: 14px; font-weight: 500; color: #111; cursor: pointer; }
+.promo-code strong { letter-spacing: .5px; }
+.promo-copy { font-size: 12px; font-weight: 600; color: #2b59d9; }
+.promo-pd { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: #fff8dc; font-size: 15px; }

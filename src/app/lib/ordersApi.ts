@@ -192,3 +192,23 @@ export async function migrateDatabase() {
 }
 
 export { ApiError }
+
+export interface ShopSettings {
+  rate: number
+  handlingPercent: number
+  promo: { enabled: boolean; code: string; text: string }
+}
+
+export async function fetchShopSettings(): Promise<ShopSettings> {
+  const response = await fetch('/api/settings', { headers: authHeaders(false) })
+  return (await parseJson<{ settings: ShopSettings }>(response)).settings
+}
+
+export async function saveShopSettings(settings: ShopSettings): Promise<ShopSettings> {
+  const response = await fetch('/api/settings', {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify(settings),
+  })
+  return (await parseJson<{ settings: ShopSettings }>(response)).settings
+}

@@ -46,13 +46,47 @@ export async function initSchema() {
   return true;
 }
 
+/**
+ * Link orders to customer accounts. Added lazily (and idempotently) because the
+ * live database predates it and schema scripts are run by hand. Memoised, and
+ * never fatal: if it fails, orders are still taken, just without the account link.
+ */
+let accountColumns = null;
+export function ensureAccountColumns() {
+  if (!accountColumns) {
+    accountColumns = (async () => {
+      try {
+        const sql = getSql();
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id TEXT`;
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT`;
+        await sql`CREATE INDEX IF NOT EXISTS orders_user_idx ON orders (user_id, created_at DESC) WHERE user_id IS NOT NULL`;
+        return true;
+      } catch (e) {
+        console.error('[orders] could not add account columns:', e.message);
+        accountColumns = null; // try again next time
+        return false;
+      }
+    })();
+  }
+  return accountColumns;
+}
+
 /** Time-ordered but collision-proof when two checkouts land in the same ms. */
 export function newOrderId() {
   return 'MSE-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef }) {
+export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef, userId, customerEmail }) {
   const sql = getSql();
+  if (userId && (await ensureAccountColumns())) {
+    const linked = await sql`
+      INSERT INTO orders (id, customer_name, customer_phone, network, amount_ugx, items, payment_ref, user_id, customer_email)
+      VALUES (${orderId}, ${customerName}, ${customerPhone}, ${network}, ${amountUGX},
+              ${JSON.stringify(items || [])}::jsonb, ${paymentRef || null}, ${userId}, ${customerEmail || null})
+      RETURNING *
+    `;
+    return linked[0];
+  }
   const rows = await sql`
     INSERT INTO orders (id, customer_name, customer_phone, network, amount_ugx, items, payment_ref)
     VALUES (${orderId}, ${customerName}, ${customerPhone}, ${network}, ${amountUGX},
@@ -172,6 +206,19 @@ export async function listStalePending({ olderThanMinutes = 5, limit = 50, netwo
        AND network = ANY(${networks})
        AND created_at < now() - make_interval(mins => ${olderThanMinutes})
      ORDER BY created_at ASC
+     LIMIT ${limit}
+  `;
+}
+
+/** A signed-in customer's own orders, newest first. Unpaid attempts are left out. */
+export async function listOrdersForUser(userId, { limit = 50 } = {}) {
+  if (!userId || !(await ensureAccountColumns())) return [];
+  const sql = getSql();
+  return sql`
+    SELECT * FROM orders
+     WHERE user_id = ${userId}
+       AND NOT (payment_status = 'PENDING' AND created_at < now() - interval '1 day')
+     ORDER BY created_at DESC
      LIMIT ${limit}
   `;
 }

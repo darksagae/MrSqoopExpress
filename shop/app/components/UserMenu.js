@@ -37,6 +37,7 @@ export default function UserMenu() {
           <div className="usermenu-overlay" onClick={() => setOpen(false)} />
           <div className="usermenu-pop">
             <div className="usermenu-name">{label}</div>
+            <Link href="/account/orders" className="usermenu-item" onClick={() => setOpen(false)}>My orders</Link>
             <button className="usermenu-item" onClick={() => signOut({ callbackUrl: '/' })}>Sign out</button>
           </div>
         </>

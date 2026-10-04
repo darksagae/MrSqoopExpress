@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { buildPaymentRequest, isCardConfigured, cardMissing } from '@/lib/payments/card';
 import { createOrder, newOrderId } from '@/lib/orders';
 import { confirmCartTotal } from '@/lib/pricing';
+import { signedInUser } from '@/lib/session';
 
 /**
  * POST /api/payments/card
@@ -41,6 +42,9 @@ export async function POST(request) {
   if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
   const { lines, total: amountUGX } = priced;
 
+  // Signed in? Tie the order to the account. Guests can still check out.
+  const account = await signedInUser();
+
   const orderId = newOrderId();
   const { endpoint, fields, transactionUuid } = buildPaymentRequest({ orderId, amountUGX });
 
@@ -52,6 +56,8 @@ export async function POST(request) {
       network: 'card',
       amountUGX,
       items: lines,
+      userId: account?.id,
+      customerEmail: account?.email,
       paymentRef: transactionUuid,
     });
   } catch (dbError) {

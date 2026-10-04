@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { resolveProvider, networkStatus, NETWORKS } from '@/lib/payments/resolve';
 import { createOrder, newOrderId, attachPaymentRef, failUnsentOrder } from '@/lib/orders';
 import { confirmCartTotal } from '@/lib/pricing';
+import { signedInUser } from '@/lib/session';
 import { detectNetwork } from '@/lib/payments/networks';
 
 /**
@@ -69,6 +70,9 @@ export async function POST(request) {
   if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
   const { lines, total: amountUGX } = priced;
 
+  // Signed in? Tie the order to the account. Guests can still check out.
+  const account = await signedInUser();
+
   const orderId = newOrderId();
 
   // Record the order before any prompt reaches the customer's phone, so a
@@ -81,6 +85,8 @@ export async function POST(request) {
       network,
       amountUGX,
       items: lines,
+      userId: account?.id,
+      customerEmail: account?.email,
       paymentRef: null,
     });
   } catch (dbError) {

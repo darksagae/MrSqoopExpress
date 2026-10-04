@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useCart } from '../cart';
@@ -7,9 +8,27 @@ import { useCart } from '../cart';
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 
 export default function CartDrawer() {
-  const { items, setQty, subtotal, shipping, shippingKnown, handling, total, open, setOpen } = useCart();
+  const { items, setQty, subtotal, shipping, shippingKnown, handling, total, open, setOpen, reprice } = useCart();
   const router = useRouter();
   const { status } = useSession();
+
+  // Carts are saved in the browser, so shipping saved earlier can be out of date.
+  // Re-quote from AliExpress whenever the cart is opened or its contents change.
+  const quoteKey = items.map((c) => `${c.id}:${c.skuId}:${c.qty}`).join('|');
+  useEffect(() => {
+    if (!open || !items.length) return undefined;
+    let stale = false;
+    fetch('/api/cart/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: items.map((c) => ({ id: c.id, skuId: c.skuId, qty: c.qty, name: c.name, img: c.img })) }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!stale && d?.items) reprice(d.items); })
+      .catch(() => {});
+    return () => { stale = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, quoteKey]);
 
   const checkout = () => {
     if (!items.length) return;

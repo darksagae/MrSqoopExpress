@@ -19,6 +19,8 @@ const DEFAULTS = {
   handlingPercent: num(process.env.NEXT_PUBLIC_HANDLING_FEE_PERCENT, 38),
   markupPercent: num(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE, 0),
   promo: { enabled: false, code: '', text: '', minOrder: 0 },
+  // Bumped whenever the banner image changes; 0 = no image.
+  promoImageVersion: 0,
 };
 
 let current = structuredClone(DEFAULTS);
@@ -67,8 +69,12 @@ export function validate(input = {}) {
     else {
       const min = Number(p.minOrder ?? 0);
       if (!Number.isFinite(min) || min < 0 || min > 100_000_000) errors.push('Minimum order must be a positive amount in UGX (or 0 for none).');
-      else out.promo = { enabled: Boolean(p.enabled) && Boolean(code || text), code, text, minOrder: Math.round(min) };
+
     }
+  }
+  if (input.promoImageVersion !== undefined) {
+    const v = Number(input.promoImageVersion);
+    if (Number.isInteger(v) && v >= 0) out.promoImageVersion = v;
   }
   return { values: out, errors };
 }
@@ -122,4 +128,65 @@ export function isSettingsAdmin(request) {
   const a = Buffer.from(given);
   const b = Buffer.from(secret);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+
+/* ---------- promo banner image ---------- */
+
+const MAX_IMAGE_BYTES = 900 * 1024;
+let assetTable = null;
+
+function ensureAssetTable(sql) {
+  if (!assetTable) {
+    assetTable = sql`
+      CREATE TABLE IF NOT EXISTS shop_assets (
+        key          TEXT PRIMARY KEY,
+        content_type TEXT        NOT NULL,
+        data         BYTEA       NOT NULL,
+        updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `.catch((e) => { assetTable = null; throw e; });
+  }
+  return assetTable;
+}
+
+/** Recognise the image by its first bytes, never by what the caller claims. */
+function sniff(buf) {
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length > 8 && buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buf.length > 12 && buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') return 'image/webp';
+  return null;
+}
+
+export async function savePromoImage(dataUrl) {
+  const m = /^data:image\/[a-z+.-]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  if (!m) return { ok: false, error: 'Send the banner as a JPG, PNG or WebP image.' };
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > MAX_IMAGE_BYTES) return { ok: false, error: 'That image is too large (max 900 KB after resizing).' };
+  const type = sniff(buf);
+  if (!type) return { ok: false, error: 'That file is not a JPG, PNG or WebP image.' };
+
+  const sql = getSql();
+  await ensureAssetTable(sql);
+  await sql`
+    INSERT INTO shop_assets (key, content_type, data) VALUES ('promo-banner', ${type}, ${buf})
+    ON CONFLICT (key) DO UPDATE SET content_type = EXCLUDED.content_type, data = EXCLUDED.data, updated_at = now()
+  `;
+  const version = Date.now();
+  const saved = await saveSettings({ promoImageVersion: version });
+  return saved.ok ? { ok: true, version } : { ok: false, error: saved.errors.join(' ') };
+}
+
+export async function removePromoImage() {
+  const sql = getSql();
+  await ensureAssetTable(sql);
+  await sql`DELETE FROM shop_assets WHERE key = 'promo-banner'`;
+  return saveSettings({ promoImageVersion: 0 });
+}
+
+export async function getPromoImage() {
+  const sql = getSql();
+  await ensureAssetTable(sql);
+  const rows = await sql`SELECT content_type, data FROM shop_assets WHERE key = 'promo-banner'`;
+  return rows[0] || null;
 }

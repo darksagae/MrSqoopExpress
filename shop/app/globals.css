@@ -1670,3 +1670,7 @@ img { display: block; max-width: 100%; }
 .pd-backbtn { display: inline-flex; background: none; border: 0; padding: 4px 0; margin-bottom: 10px; font: inherit; font-size: 15px; font-weight: 600; color: #111; cursor: pointer; }
 .pd-backbtn:hover { text-decoration: underline; }
 button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
+
+.promo-img { display: block; flex-basis: 100%; border-radius: 16px; overflow: hidden; background: #f3f3f6; line-height: 0; }
+.promo-img img { width: 100%; height: auto; display: block; }
+.promo-line:empty { display: none; }

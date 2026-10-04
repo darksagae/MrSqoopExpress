@@ -20,7 +20,7 @@ export default function PromoBanner({ className = '' }) {
     return () => { cancelled = true; };
   }, []);
 
-  if (!promo || (!promo.text && !promo.code)) return null;
+  if (!promo || (!promo.text && !promo.code && !promo.image)) return null;
 
   const copy = async () => {
     try {
@@ -32,6 +32,11 @@ export default function PromoBanner({ className = '' }) {
 
   return (
     <div className={`promo ${className}`} role="note">
+      {promo.image && (
+        <a href="/#shop" className="promo-img" aria-label={promo.text || 'Promotion'}>
+          <img src={promo.image} alt={promo.text || 'Promotion'} loading="lazy" decoding="async" />
+        </a>
+      )}
       {promo.text && <span className="promo-text">{promo.text}</span>}
       {promo.text && promo.code && <span className="promo-sep" aria-hidden="true">|</span>}
       {promo.code && (

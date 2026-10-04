@@ -8,7 +8,7 @@ import { loadSettings, saveSettings, isSettingsAdmin } from '@/lib/settings';
  * Reads or changes the exchange rate, handling fee percentage and promo banner.
  */
 const denied = () => NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-const view = (s) => ({ rate: s.rate, handlingPercent: s.handlingPercent, promo: s.promo });
+const view = (s) => ({ rate: s.rate, handlingPercent: s.handlingPercent, promo: s.promo, promoImageVersion: s.promoImageVersion });
 
 export async function GET(request) {
   if (!isSettingsAdmin(request)) return denied();

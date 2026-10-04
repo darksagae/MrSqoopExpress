@@ -197,6 +197,7 @@ export interface ShopSettings {
   rate: number
   handlingPercent: number
   promo: { enabled: boolean; code: string; text: string; minOrder: number }
+  promoImageVersion: number
 }
 
 export async function fetchShopSettings(): Promise<ShopSettings> {
@@ -211,4 +212,18 @@ export async function saveShopSettings(settings: ShopSettings): Promise<ShopSett
     body: JSON.stringify(settings),
   })
   return (await parseJson<{ settings: ShopSettings }>(response)).settings
+}
+
+export async function uploadPromoBanner(dataUrl: string): Promise<number> {
+  const response = await fetch('/api/settings-banner', {
+    method: 'PUT',
+    headers: authHeaders(),
+    body: JSON.stringify({ dataUrl }),
+  })
+  return (await parseJson<{ promoImageVersion: number }>(response)).promoImageVersion
+}
+
+export async function removePromoBanner(): Promise<void> {
+  const response = await fetch('/api/settings-banner', { method: 'DELETE', headers: authHeaders(false) })
+  await parseJson<{ ok: boolean }>(response)
 }

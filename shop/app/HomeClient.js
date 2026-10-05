@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { useCart } from './cart';
 import { CATEGORIES } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
@@ -195,17 +196,26 @@ function useFeed(query, initial) {
 
 const ROW_SIZE = 10;
 
-// Recent searches, remembered on this device.
-const RECENT_KEY = 'mse_recent_searches';
+// Recent searches belong to one person. Signed in, they are kept on this
+// device under that account only, so someone else signing in on the same phone
+// never sees them. Not signed in, they last only for this browser session.
 const RECENT_MAX = 8;
+let recentOwner = null; // account id, or null for a guest
+
+function recentStore() {
+  return recentOwner ? localStorage : sessionStorage;
+}
+function recentKey() {
+  return recentOwner ? `mse_recent_searches:${recentOwner}` : 'mse_recent_searches:guest';
+}
 function readRecent() {
   try {
-    const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    const v = JSON.parse(recentStore().getItem(recentKey()) || '[]');
     return Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, RECENT_MAX) : [];
   } catch { return []; }
 }
 function writeRecent(list) {
-  try { localStorage.setItem(RECENT_KEY, JSON.stringify(list)); } catch { /* storage blocked */ }
+  try { recentStore().setItem(recentKey(), JSON.stringify(list)); } catch { /* storage blocked */ }
 }
 
 /**
@@ -287,7 +297,15 @@ export default function HomeClient({ initial = null }) {
   const scrollRestored = useRef(false);
   const jumpToResults = useRef(false);
 
-  useEffect(() => { setRecent(readRecent()); }, []);
+  // Load the history of whoever is signed in, and switch it when they change.
+  const { data: session, status: authStatus } = useSession();
+  const ownerId = session?.user?.id || null;
+  useEffect(() => {
+    if (authStatus === 'loading') return;
+    recentOwner = ownerId;
+    try { localStorage.removeItem('mse_recent_searches'); } catch { /* old shared list */ }
+    setRecent(readRecent());
+  }, [ownerId, authStatus]);
   useEffect(() => { setKeyword(query); }, [query]);
 
   const remember = (q) => {

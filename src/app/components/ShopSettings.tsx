@@ -51,7 +51,12 @@ export function ShopSettings() {
       const { promoImageVersion, ...rest } = form
       void promoImageVersion
       setForm(await saveShopSettings(rest as Settings))
-      setMessage({ ok: true, text: 'Saved. The shop uses these within about a minute.' })
+      setMessage({
+        ok: true,
+        text: form.promo.enabled
+          ? 'Saved. The shop uses these within about a minute.'
+          : 'Saved. The promo banner is switched OFF, so nothing shows on the shop. Tick “Show promo banner” to show it.',
+      })
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Could not save.' })
     } finally {
@@ -65,8 +70,13 @@ export function ShopSettings() {
     setMessage(null)
     try {
       const version = await uploadPromoBanner(await toBannerDataUrl(file))
-      setForm({ ...form, promoImageVersion: version })
-      setMessage({ ok: true, text: 'Banner uploaded. Make sure “Show promo banner” is ticked and saved.' })
+      // A freshly uploaded banner goes live straight away: switch the banner on
+      // and save, so there is no second step to forget.
+      const { promoImageVersion, ...rest } = { ...form, promoImageVersion: version }
+      void promoImageVersion
+      const saved = await saveShopSettings({ ...rest, promo: { ...form.promo, enabled: true } } as Settings)
+      setForm(saved)
+      setMessage({ ok: true, text: 'Banner uploaded and switched on. It shows on the shop within about a minute.' })
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Could not upload the banner.' })
     } finally {

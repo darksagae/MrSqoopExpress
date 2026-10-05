@@ -52,7 +52,7 @@ export async function GET(request, { params }) {
 
     if (candidates.length && !sellable.length) {
       return NextResponse.json(
-        { error: 'This product is not available for delivery to Uganda.', code: 'NOT_DELIVERABLE' },
+        { error: 'This product is not available for delivery to Uganda.', code: 'NOT_DELIVERABLE', reasons: [...new Set(quotes.map((q) => q?.reason).filter(Boolean))].slice(0, 3) },
         { status: 404 }
       );
     }

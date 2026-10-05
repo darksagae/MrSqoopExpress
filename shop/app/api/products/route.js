@@ -127,6 +127,7 @@ export async function GET(request) {
       // looking like the search simply found little.
       removedUndeliverable: priced.filter((p) => p.shipping.deliverable === false).length,
       unknownShippingCount: priced.filter((p) => p.shipping.deliverable === null).length,
+      unknownNoOption: priced.filter((p) => p.shipping.deliverable === null && !p.skuId).length,
       keyword,
       markupPercentage: currentSettings().markupPercent,
       exchangeRate: currentSettings().rate,

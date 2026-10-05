@@ -101,7 +101,16 @@ export async function GET(request) {
       // were filtered out, leaving searches empty.
       const fresh = await attachSkus(batch.filter((p) => !seen.has(p.id)));
       batch.forEach((p) => seen.add(p.id));
-      const freights = withShipping ? await quoteFreightForAll(fresh) : fresh.map(() => null);
+      let freights = withShipping ? await quoteFreightForAll(fresh) : fresh.map(() => null);
+      // AliExpress answers a burst of freight calls with passing errors now and
+      // then. Ask again, once, for just the ones that did not come back.
+      const missed = withShipping ? freights.map((f, k) => (f ? -1 : k)).filter((k) => k >= 0 && fresh[k].skuId) : [];
+      if (missed.length) {
+        await new Promise((r) => setTimeout(r, 600));
+        const again = await quoteFreightForAll(missed.map((k) => fresh[k]));
+        freights = freights.slice();
+        missed.forEach((k, n) => { freights[k] = again[n]; });
+      }
       priced.push(...priceProducts(fresh, freights));
 
       // Only products AliExpress has confirmed it will deliver to Uganda are

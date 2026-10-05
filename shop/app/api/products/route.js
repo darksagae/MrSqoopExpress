@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
 import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
+import { attachSkus } from '@/lib/trending';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
@@ -95,8 +96,11 @@ export async function GET(request) {
       hasMore = batch.length > 0;
       if (!batch.length) break;
 
-      const fresh = batch.filter((p) => !seen.has(p.id));
-      fresh.forEach((p) => seen.add(p.id));
+      // Search results often carry no purchasable option, and shipping can only be
+      // quoted for one. Without this step most results had "unknown" shipping and
+      // were filtered out, leaving searches empty.
+      const fresh = await attachSkus(batch.filter((p) => !seen.has(p.id)));
+      batch.forEach((p) => seen.add(p.id));
       const freights = withShipping ? await quoteFreightForAll(fresh) : fresh.map(() => null);
       priced.push(...priceProducts(fresh, freights));
 

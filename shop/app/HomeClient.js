@@ -271,6 +271,7 @@ export default function HomeClient({ initial = null }) {
   const [recent, setRecent] = useState([]);
   const [focused, setFocused] = useState(false);
   const scrollRestored = useRef(false);
+  const jumpToResults = useRef(false);
 
   useEffect(() => { setRecent(readRecent()); }, []);
   useEffect(() => { setKeyword(query); }, [query]);
@@ -293,6 +294,7 @@ export default function HomeClient({ initial = null }) {
     setKeyword(clean);
     setFocused(false);
     scrollRestored.current = true; // a new search starts at the top
+    jumpToResults.current = true;
     router.push(clean ? `/?q=${encodeURIComponent(clean)}` : '/', { scroll: false });
   };
   const rowRef = useRef(null);
@@ -367,9 +369,19 @@ export default function HomeClient({ initial = null }) {
     } catch { /* ignore */ }
   }, [feed.loading, feed.items.length, query]);
 
+  // After a category or search is chosen, bring its results to the top of the
+  // screen as soon as the address (and so the list) has changed.
+  useEffect(() => {
+    if (!jumpToResults.current) return;
+    jumpToResults.current = false;
+    requestAnimationFrame(() => {
+      const top = document.getElementById('shop')?.getBoundingClientRect().top;
+      if (top !== undefined) window.scrollTo({ top: window.scrollY + top - 70, behavior: 'smooth' });
+    });
+  }, [query]);
+
   const pickCategory = (cat) => {
     runSearch(cat.keyword);
-    document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const scrollRow = (dir) =>

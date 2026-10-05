@@ -73,27 +73,41 @@ export async function GET(request) {
     // product is another freight quote.
     const fetchSize = dropUndeliverable ? Math.min(MAX_PAGE_SIZE, Math.ceil(limit * OVERFETCH)) : limit;
 
-    const products = await aliexpressDS.searchProducts({
-      keyword,
-      page,
-      pageSize: fetchSize,
-      countryCode: CUSTOMER_DESTINATION.countryCode,
-      currency: 'USD',
-    });
+    // Some categories (bulky goods, for example) lose most results to the Uganda
+    // delivery filter, which left rows with two or three items. So one page the
+    // shopper asks for can draw on up to PAGES_PER_REQUEST AliExpress pages,
+    // stopping as soon as it has enough confirmed-deliverable products.
+    const PAGES_PER_REQUEST = dropUndeliverable ? 3 : 1;
+    const firstSearchPage = (page - 1) * PAGES_PER_REQUEST + 1;
+    const seen = new Set();
+    const priced = [];
+    let shown = [];
+    let hasMore = false;
 
-    const freights = withShipping ? await quoteFreightForAll(products) : products.map(() => null);
+    for (let i = 0; i < PAGES_PER_REQUEST; i++) {
+      const batch = await aliexpressDS.searchProducts({
+        keyword,
+        page: firstSearchPage + i,
+        pageSize: fetchSize,
+        countryCode: CUSTOMER_DESTINATION.countryCode,
+        currency: 'USD',
+      });
+      hasMore = batch.length > 0;
+      if (!batch.length) break;
 
-    const priced = priceProducts(products, freights);
+      const fresh = batch.filter((p) => !seen.has(p.id));
+      fresh.forEach((p) => seen.add(p.id));
+      const freights = withShipping ? await quoteFreightForAll(fresh) : fresh.map(() => null);
+      priced.push(...priceProducts(fresh, freights));
 
-    // Only a definite refusal from AliExpress removes a product. An unknown
-    // quote means the lookup failed, not that the seller won't ship — dropping
-    // those would hide perfectly sellable stock every time a request timed out.
-    // Only products AliExpress has confirmed it will deliver to Uganda are listed.
-    // A shipping lookup that failed or timed out counts as not confirmed: showing
-    // those let items through that turn out to be undeliverable once opened.
-    const shown = dropUndeliverable
-      ? priced.filter((p) => p.shipping.deliverable === true).slice(0, limit)
-      : priced;
+      // Only products AliExpress has confirmed it will deliver to Uganda are
+      // listed. A shipping lookup that failed or timed out counts as not
+      // confirmed: showing those let items through that turn out to be
+      // undeliverable once opened.
+      shown = dropUndeliverable ? priced.filter((p) => p.shipping.deliverable === true) : priced;
+      if (shown.length >= limit) break;
+    }
+    shown = dropUndeliverable ? shown.slice(0, limit) : shown;
 
     return NextResponse.json({
       success: true,
@@ -104,7 +118,7 @@ export async function GET(request) {
       // only real "no more results" signal is an empty page. Everything short
       // of that (including a page thinned by shipping filtering) still means
       // there's more to try.
-      hasMore: products.length > 0,
+      hasMore,
       // How many the filter removed, so a thin page is explainable rather than
       // looking like the search simply found little.
       removedUndeliverable: priced.filter((p) => p.shipping.deliverable === false).length,

@@ -23,6 +23,19 @@ const MAX_QTY = 50;
 /** A problem with the cart the shopper can fix; message is customer-safe. */
 export class CartProblem extends Error {}
 
+// AliExpress answers some freight calls with a passing DELIVERY_SERVICE_EXCEPTION.
+// At checkout that must not stop someone paying, so ask a few times.
+async function freightWithRetry(args) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await aliexpressDS.queryFreight(args);
+    } catch (e) {
+      if (e.code !== 'FREIGHT_TEMPORARY' || attempt >= 2) throw e;
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+}
+
 async function priceLine(item) {
   const productId = String(item?.id ?? '').split(':')[0];
   const qty = Number(item?.qty);
@@ -50,7 +63,7 @@ async function priceLine(item) {
 
   // Quoted for the quantity actually being bought: AliExpress prices freight by
   // weight and quantity, so one unit's quote times N is not what it will bill.
-  const freight = await aliexpressDS.queryFreight({ productId, skuId: variant.skuId, quantity: qty });
+  const freight = await freightWithRetry({ productId, skuId: variant.skuId, quantity: qty });
   if (!freight.deliverable) {
     throw new CartProblem(`"${label}" can't be delivered to Uganda. Please remove it from your cart.`);
   }

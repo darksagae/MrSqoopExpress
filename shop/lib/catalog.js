@@ -99,7 +99,6 @@ export function priceProducts(products, freights) {
             free: Boolean(f.freeShipping),
             costUSD: shipUSD == null ? null : round2(shipUSD),
             costUGX: shipUSD == null ? null : shipUGX(shipUSD),
-            company: f.company,
             minDays: f.minDays,
             maxDays: f.maxDays,
           }

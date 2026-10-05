@@ -105,7 +105,6 @@ export async function GET(request, { params }) {
           free: Boolean(freight?.freeShipping),
           costUSD: shipUSD == null ? null : round2(shipUSD),
           costUGX: shipUSD == null ? null : shipUGX(shipUSD),
-          company: freight?.company || null,
           minDays: freight?.minDays ?? null,
           maxDays: freight?.maxDays ?? null,
           desc: freight?.deliveryDesc || d.deliveryDays || null,

@@ -1,6 +1,7 @@
 import { aliexpressDS } from './aliexpress.js';
 import { CATEGORIES } from './categories.js';
 import { mapPool, memoAsync } from './pool.js';
+import { shared } from './shared-cache.js';
 
 /**
  * "Best picks": what AliExpress itself ranks as best selling, not a keyword we
@@ -175,9 +176,15 @@ const OPTION_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Which option to list a product at, remembered so the same best sellers aren't
 // looked up again on every page and every cold start of this server.
+const sharedProduct = shared(
+  (productId) => aliexpressDS.getProduct({ productId }),
+  'product-v1',
+  OPTION_TTL_MS / 1000
+);
+
 const cheapestOption = memoAsync(
   async (productId) => {
-    const d = await aliexpressDS.getProduct({ productId });
+    const d = await sharedProduct(productId);
     // Unknown stock counts as available, matching what checkout allows.
     const inStock = (v) => v.stock == null || v.stock === '' || Number(v.stock) > 0;
     const options = d.variants.filter((v) => v.skuId && v.priceUSD > 0 && inStock(v));

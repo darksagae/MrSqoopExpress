@@ -115,9 +115,9 @@ export async function GET(request, { params }) {
       },
     });
   } catch (error) {
-    console.error('Product detail fetch failed:', error);
+    console.error('Product detail fetch failed:', error.code, error.message);
     return NextResponse.json(
-      { error: 'Failed to load product.', code: error.code || 'UNKNOWN', message: error.message },
+      { error: 'Could not load this product right now.', message: 'Please try again in a moment.' },
       { status: 502 }
     );
   }

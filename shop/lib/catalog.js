@@ -2,6 +2,7 @@ import { aliexpressDS } from './aliexpress.js';
 import { itemUGX, shipUGX } from './pricing.js';
 import { handlingFee } from './shipping-destination.js';
 import { mapPool, memoAsync } from './pool.js';
+import { shared } from './shared-cache.js';
 
 // AliExpress answers a freight quote in ~0.4s, so these run in parallel; this
 // is the most we will have in flight at once.
@@ -22,12 +23,18 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  * an unknown shipping cost is still worth showing, but a listing that 502s
  * because one freight lookup timed out is not.
  */
+const sharedFreight = shared(
+  (productId, skuId) => aliexpressDS.queryFreight({ productId, skuId }),
+  'freight-ug-v1',
+  FREIGHT_TTL_MS / 1000
+);
+
 const cachedFreight = memoAsync(
   (key) => {
     const [productId, skuId] = key.split(':');
     // AliExpress sometimes answers a freight call with a passing service error;
     // one quick retry resolves most of them.
-    const ask = () => withTimeout(aliexpressDS.queryFreight({ productId, skuId }), FREIGHT_TIMEOUT_MS);
+    const ask = () => withTimeout(sharedFreight(productId, skuId), FREIGHT_TIMEOUT_MS);
     return ask().catch(async (e) => {
       if (e.code !== 'FREIGHT_TEMPORARY') throw e;
       await new Promise((r) => setTimeout(r, 400));

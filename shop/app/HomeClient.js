@@ -140,12 +140,12 @@ function useFeed(query, initial) {
     setPage(1);
     const first = () =>
       fetch(urlFor(1))
-        .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+        .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, d })))
         .then((res) => {
-          // Empty or failed (AliExpress briefly busy): wait a moment and try once
-          // more, past any cached copy.
+          // Empty or failed (supplier briefly busy): wait and try once more, past
+          // any cached copy. "Busy" waits out the supplier's short pause.
           if (!res.ok || !(res.d.products || []).length) {
-            return new Promise((r) => setTimeout(r, 1500)).then(() =>
+            return new Promise((r) => setTimeout(r, res.status === 503 ? 6000 : 1500)).then(() =>
               fetch(`${urlFor(1)}&_=${Date.now()}`).then((r) => r.json().then((d) => ({ ok: r.ok, d }))));
           }
           return res;

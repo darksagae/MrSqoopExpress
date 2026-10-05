@@ -173,16 +173,14 @@ export async function GET(request) {
       },
     });
   } catch (error) {
-    console.error('AliExpress product fetch failed:', error);
+    console.error('Product search failed:', error.code, error.message);
+    // Never pass the supplier's own error text to shoppers.
+    const busy = error.code === 'RATE_LIMITED';
     return NextResponse.json(
-      {
-        error: 'Could not load products right now.',
-        code: error.code || 'UNKNOWN',
-        message: error.message,
-        ...(error.raw ? { rawSnippet: error.raw } : {}),
-        ...(error.details ? { apiDetails: error.details } : {}),
-      },
-      { status: 502 }
+      busy
+        ? { error: 'Search is busy right now.', message: 'Please try again in a few seconds.', code: 'BUSY' }
+        : { error: 'Could not load products right now.', message: 'Please try again in a moment.' },
+      { status: busy ? 503 : 502, headers: { 'Cache-Control': 'no-store' } }
     );
   }
 }

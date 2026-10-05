@@ -233,33 +233,63 @@ function writeRecent(list) {
   try { recentStore().setItem(recentKey(), JSON.stringify(list)); } catch { /* storage blocked */ }
 }
 
+// Rows are fetched one or two at a time. Opening all thirteen at once made the
+// supplier throttle us, so rows came back empty and vanished.
+const rowQueue = [];
+let rowsRunning = 0;
+const ROW_PARALLEL = 2;
+function enqueueRow(task) {
+  rowQueue.push(task);
+  pumpRows();
+}
+function pumpRows() {
+  while (rowsRunning < ROW_PARALLEL && rowQueue.length) {
+    const next = rowQueue.shift();
+    rowsRunning += 1;
+    next().finally(() => { rowsRunning -= 1; pumpRows(); });
+  }
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchRow(keyword, isCancelled) {
+  const base = `/api/products?keyword=${encodeURIComponent(keyword)}&page=1&limit=${ROW_SIZE}`;
+  // Up to three tries, each a little later, the later ones past any cached copy.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (isCancelled()) return null;
+    try {
+      const r = await fetch(attempt ? `${base}&_=${Date.now()}` : base);
+      if (r.ok) {
+        const d = await r.json();
+        if (d?.products?.length) return d.products;
+      }
+    } catch { /* try again */ }
+    await wait(1500 * (attempt + 1));
+  }
+  return [];
+}
+
 /**
  * A titled, sideways-scrolling row of one category's products. It fetches only
  * once it comes near the screen, so thirteen rows don't fire thirteen searches
- * (each with its own shipping quotes) the moment the page opens. A category
- * that comes back empty or errors hides itself rather than leave a hole.
+ * at once. A row that cannot load keeps its place with a Try again button
+ * rather than disappearing.
  */
 function CategoryRow({ cat, onAdd, onViewAll }) {
   const ref = useRef(null);
   const [state, setState] = useState({ status: 'idle', items: [] });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
     let cancelled = false;
     const load = () => {
-      setState({ status: 'loading', items: [] });
-      const url = `/api/products?keyword=${encodeURIComponent(cat.keyword)}&page=1&limit=${ROW_SIZE}`;
-      fetch(url)
-        .then((r) => (r.ok ? r.json() : null))
-        // An empty or failed first answer gets one more try, past any cached copy.
-        .then((d) => (d?.products?.length ? d : fetch(`${url}&_=${Date.now()}`).then((r) => (r.ok ? r.json() : null))))
-        .then((d) => {
-          if (cancelled) return;
-          const items = d?.products || [];
-          setState({ status: items.length ? 'ready' : 'empty', items });
-        })
-        .catch(() => !cancelled && setState({ status: 'empty', items: [] }));
+      setState((s) => (s.status === 'ready' ? s : { status: 'loading', items: [] }));
+      enqueueRow(async () => {
+        const items = await fetchRow(cat.keyword, () => cancelled);
+        if (cancelled || items === null) return;
+        setState({ status: items.length ? 'ready' : 'failed', items });
+      });
     };
     if (typeof IntersectionObserver === 'undefined') {
       load();
@@ -273,9 +303,7 @@ function CategoryRow({ cat, onAdd, onViewAll }) {
     }, { rootMargin: '600px 0px' });
     io.observe(el);
     return () => { cancelled = true; io.disconnect(); };
-  }, [cat.keyword]);
-
-  if (state.status === 'empty') return null;
+  }, [cat.keyword, attempt]);
 
   return (
     <section className="section cat-row" ref={ref} aria-label={cat.label}>
@@ -285,13 +313,22 @@ function CategoryRow({ cat, onAdd, onViewAll }) {
           View All <span aria-hidden="true">›</span>
         </button>
       </div>
-      <div className="hscroll" aria-busy={state.status !== 'ready'}>
-        {state.status === 'ready'
-          ? state.items.map((p) => <ProductCard key={p.id} p={p} onAdd={onAdd} />)
-          : Array.from({ length: 5 }).map((_, i) => (
-            <div className="pc pc-skeleton" key={i}><div className="pc-media" /><i /><i /></div>
-          ))}
-      </div>
+      {state.status === 'failed' ? (
+        <p className="row-failed">
+          Couldn&apos;t load these right now.{' '}
+          <button type="button" onClick={() => { setState({ status: 'idle', items: [] }); setAttempt((n) => n + 1); }}>
+            Try again
+          </button>
+        </p>
+      ) : (
+        <div className="hscroll" aria-busy={state.status !== 'ready'}>
+          {state.status === 'ready'
+            ? state.items.map((p) => <ProductCard key={p.id} p={p} onAdd={onAdd} />)
+            : Array.from({ length: 5 }).map((_, i) => (
+              <div className="pc pc-skeleton" key={i}><div className="pc-media" /><i /><i /></div>
+            ))}
+        </div>
+      )}
     </section>
   );
 }

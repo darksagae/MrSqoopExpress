@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import HomeClient from './HomeClient';
 import HomeSeo from './components/HomeSeo';
 import { aliexpressDS } from '@/lib/aliexpress';
@@ -37,12 +36,9 @@ async function loadInitial() {
 }
 
 export default async function Home() {
-  // HomeClient reads the search from the URL, which needs a Suspense boundary.
   return (
     <>
-      <Suspense fallback={null}>
-        <HomeClient initial={await loadInitial()} />
-      </Suspense>
+      <HomeClient initial={await loadInitial()} />
       <HomeSeo />
     </>
   );

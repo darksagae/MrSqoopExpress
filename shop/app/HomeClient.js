@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useCart } from './cart';
 import { CATEGORIES } from '@/lib/categories';
@@ -196,6 +196,21 @@ function useFeed(query, initial) {
 
 const ROW_SIZE = 10;
 
+// The submitted search lives in the address bar (/?q=shoes). It is read straight
+// from the URL instead of with useSearchParams, because that hook forces the
+// whole page to render in the browser only, which would hide the home page's
+// heading and its ready-made products from search engines.
+function subscribeUrl(cb) {
+  window.addEventListener('popstate', cb);
+  window.addEventListener('mse:url', cb);
+  return () => {
+    window.removeEventListener('popstate', cb);
+    window.removeEventListener('mse:url', cb);
+  };
+}
+const readQuery = () => new URLSearchParams(window.location.search).get('q') || '';
+const serverQuery = () => '';
+
 // Recent searches belong to one person. Signed in, they are kept on this
 // device under that account only, so someone else signing in on the same phone
 // never sees them. Not signed in, they last only for this browser session.
@@ -288,8 +303,7 @@ export default function HomeClient({ initial = null }) {
   // the default view: whatever AliExpress ranks as best selling.
   // The submitted search lives in the URL (/?q=shoes) rather than in memory, so
   // opening a product and pressing Back returns to the same results.
-  const params = useSearchParams();
-  const query = (params.get('q') || '').trim();
+  const query = useSyncExternalStore(subscribeUrl, readQuery, serverQuery).trim();
   const [keyword, setKeyword] = useState(query);
   const feed = useFeed(query, query ? null : initial);
   const [recent, setRecent] = useState([]);
@@ -327,7 +341,8 @@ export default function HomeClient({ initial = null }) {
     setFocused(false);
     scrollRestored.current = true; // a new search starts at the top
     jumpToResults.current = true;
-    router.push(clean ? `/?q=${encodeURIComponent(clean)}` : '/', { scroll: false });
+    window.history.pushState(null, '', clean ? `/?q=${encodeURIComponent(clean)}` : '/');
+    window.dispatchEvent(new Event('mse:url'));
   };
   const rowRef = useRef(null);
 

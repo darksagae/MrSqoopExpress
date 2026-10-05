@@ -33,7 +33,7 @@ export async function GET(request, { params }) {
 
   if (!aliexpressDS.hasCredentials()) {
     return NextResponse.json(
-      { error: 'AliExpress Dropshipping API is not connected.', missing: aliexpressDS.missingConfig() },
+      { error: 'Products are not available right now.' },
       { status: 503 }
     );
   }

@@ -82,7 +82,6 @@ export function priceProducts(products, freights) {
       skuId: p.skuId,
       title: p.title,
       image: p.image,
-      url: p.url,
       // The AliExpress figure itself, untouched.
       priceUSD: round2(p.priceUSD),
       priceUGX,

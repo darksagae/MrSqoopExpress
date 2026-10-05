@@ -9,7 +9,15 @@ export default function SiteHeader() {
 
   return (
     <>
-      <div className="announcement"><p>Shipping to Uganda · delivery time shown on every product</p></div>
+      {/* One sentence, scrolling. The repeats only fill the strip for the
+          animation, so they are hidden from screen readers. */}
+      <div className="announcement">
+        <div className="marquee">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span key={i} aria-hidden={i > 0 ? 'true' : undefined}>Shipping to Uganda · delivery time shown on every product</span>
+          ))}
+        </div>
+      </div>
 
       <header className="header">
         <nav className="nav-left">

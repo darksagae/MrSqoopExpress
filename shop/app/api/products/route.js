@@ -60,9 +60,7 @@ export async function GET(request) {
   if (!aliexpressDS.hasCredentials()) {
     return NextResponse.json(
       {
-        error: 'AliExpress Dropshipping API is not connected yet.',
-        missing: aliexpressDS.missingConfig(),
-        hint: 'Set the app key and secret from your approved AliExpress app.',
+        error: 'Products are not available right now.',
       },
       { status: 503 }
     );
@@ -178,7 +176,7 @@ export async function GET(request) {
     console.error('AliExpress product fetch failed:', error);
     return NextResponse.json(
       {
-        error: 'Failed to fetch products from AliExpress.',
+        error: 'Could not load products right now.',
         code: error.code || 'UNKNOWN',
         message: error.message,
         ...(error.raw ? { rawSnippet: error.raw } : {}),

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 const WHY = [
-  ['International shopping', 'Browse thousands of products from AliExpress, priced in Uganda shillings.'],
+  ['International shopping', 'Browse thousands of products from trusted international suppliers, priced in Uganda shillings.'],
   ['Delivery to Uganda', 'Only products that can be delivered to Uganda are listed, each with its shipping cost and delivery window.'],
   ['Clear prices', 'You see the item price, the shipping and our handling fee before you pay. No surprises at checkout.'],
   ['Order tracking', 'Follow your order from payment to delivery in Track Order, with live status updates.'],
@@ -41,9 +41,9 @@ export default function HomeSeo() {
       <section className="section seo-block" aria-labelledby="intl-title">
         <h2 id="intl-title" className="section-title">International shopping and shipping to Uganda</h2>
         <p className="seo-lead">
-          Mr Sqoop Express lets you shop international products online and have them delivered to Uganda.
-          Our catalogue comes from AliExpress. Want to know how ordering from AliExpress works in Uganda?{' '}
-          <Link href="/aliexpress-uganda">Read our AliExpress to Uganda guide</Link>.
+          Mr Sqoop Express lets you shop products from international suppliers online and have them delivered to
+          Uganda, paying in shillings with mobile money.{' '}
+          <Link href="/international-shopping-uganda">Read our guide to international shopping in Uganda</Link>.
         </p>
       </section>
     </>

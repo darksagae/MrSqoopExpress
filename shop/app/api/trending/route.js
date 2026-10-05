@@ -21,7 +21,7 @@ export async function GET(request) {
 
   if (!aliexpressDS.hasCredentials()) {
     return NextResponse.json(
-      { error: 'AliExpress Dropshipping API is not connected yet.' },
+      { error: 'Products are not available right now.' },
       { status: 503, headers: { 'Cache-Control': 'no-store' } }
     );
   }

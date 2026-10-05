@@ -25,7 +25,14 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const cachedFreight = memoAsync(
   (key) => {
     const [productId, skuId] = key.split(':');
-    return withTimeout(aliexpressDS.queryFreight({ productId, skuId }), FREIGHT_TIMEOUT_MS);
+    // AliExpress sometimes answers a freight call with a passing service error;
+    // one quick retry resolves most of them.
+    const ask = () => withTimeout(aliexpressDS.queryFreight({ productId, skuId }), FREIGHT_TIMEOUT_MS);
+    return ask().catch(async (e) => {
+      if (e.code !== 'FREIGHT_TEMPORARY') throw e;
+      await new Promise((r) => setTimeout(r, 400));
+      return ask();
+    });
   },
   { ttlMs: FREIGHT_TTL_MS }
 );

@@ -353,8 +353,19 @@ export class AliExpressDS {
     // not an error. That is a real, useful answer and must not be reported the
     // same way as a lookup that failed — one means the product cannot be sold to
     // this destination, the other means try again.
-    const refused = result.success === false;
-    const reason = refused ? result.msg || `code ${result.code}` : null;
+    const failed = result.success === false;
+    const reason = failed ? result.msg || `code ${result.code}` : null;
+    // Only a real "we do not ship there" is a refusal. AliExpress also answers
+    // success:false for its own hiccups (DELIVERY_SERVICE_EXCEPTION, throttling),
+    // which say nothing about the product. Treating those as "undeliverable"
+    // hid sellable products at random, so they are thrown as errors instead:
+    // the caller sees "unknown", and nothing is cached.
+    const refused = failed && /NOT_AVAILABLE|NOT_SUPPORT|NOT_SHIP|UNREACHABLE|CANNOT_BE_DELIVERED/i.test(reason);
+    if (failed && !refused) {
+      const err = new Error(`Freight temporarily unavailable: ${reason}`);
+      err.code = 'FREIGHT_TEMPORARY';
+      throw err;
+    }
 
     // Prefer a free option; otherwise the cheapest paid option. The cost is shown
     // to the customer as shipping to Uganda, exactly as AliExpress quoted it.

@@ -137,13 +137,15 @@ function useFeed(query, initial) {
     setLoading(true);
     setError(null);
     setPage(1);
-    // An empty first answer is retried once, bypassing any cached copy.
     const first = () =>
       fetch(urlFor(1))
         .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
         .then((res) => {
-          if (res.ok && !(res.d.products || []).length) {
-            return fetch(`${urlFor(1)}&_=${Date.now()}`).then((r) => r.json().then((d) => ({ ok: r.ok, d })));
+          // Empty or failed (AliExpress briefly busy): wait a moment and try once
+          // more, past any cached copy.
+          if (!res.ok || !(res.d.products || []).length) {
+            return new Promise((r) => setTimeout(r, 1500)).then(() =>
+              fetch(`${urlFor(1)}&_=${Date.now()}`).then((r) => r.json().then((d) => ({ ok: r.ok, d }))));
           }
           return res;
         });

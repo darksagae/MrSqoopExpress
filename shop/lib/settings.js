@@ -69,7 +69,7 @@ export function validate(input = {}) {
     else {
       const min = Number(p.minOrder ?? 0);
       if (!Number.isFinite(min) || min < 0 || min > 100_000_000) errors.push('Minimum order must be a positive amount in UGX (or 0 for none).');
-
+      else out.promo = { enabled: Boolean(p.enabled), code, text, minOrder: Math.round(min) };
     }
   }
   if (input.promoImageVersion !== undefined) {

@@ -5,7 +5,7 @@ import { mapPool, memoAsync } from './pool.js';
 
 // AliExpress answers a freight quote in ~0.4s, so these run in parallel; this
 // is the most we will have in flight at once.
-const FREIGHT_CONCURRENCY = 12;
+const FREIGHT_CONCURRENCY = 6;
 // Shipping cost to Uganda for a given product option changes rarely. Charging
 // never relies on this copy: checkout re-quotes live in lib/pricing.js.
 const FREIGHT_TTL_MS = 6 * 60 * 60 * 1000;

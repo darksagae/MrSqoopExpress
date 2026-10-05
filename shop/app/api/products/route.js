@@ -99,28 +99,47 @@ export async function GET(request) {
       // Search results often carry no purchasable option, and shipping can only be
       // quoted for one. Without this step most results had "unknown" shipping and
       // were filtered out, leaving searches empty.
-      const fresh = await attachSkus(batch.filter((p) => !seen.has(p.id)));
+      const unseen = batch.filter((p) => !seen.has(p.id));
       batch.forEach((p) => seen.add(p.id));
-      let freights = withShipping ? await quoteFreightForAll(fresh) : fresh.map(() => null);
-      // AliExpress answers a burst of freight calls with passing errors now and
-      // then. Ask again, once, for just the ones that did not come back.
-      const missed = withShipping ? freights.map((f, k) => (f ? -1 : k)).filter((k) => k >= 0 && fresh[k].skuId) : [];
-      if (missed.length) {
-        await new Promise((r) => setTimeout(r, 600));
-        const again = await quoteFreightForAll(missed.map((k) => fresh[k]));
-        freights = freights.slice();
-        missed.forEach((k, n) => { freights[k] = again[n]; });
-      }
-      priced.push(...priceProducts(fresh, freights));
 
-      // Only products AliExpress has confirmed it will deliver to Uganda are
-      // listed. A shipping lookup that failed or timed out counts as not
-      // confirmed: showing those let items through that turn out to be
-      // undeliverable once opened.
-      shown = dropUndeliverable ? priced.filter((p) => p.shipping.deliverable === true) : priced;
+      // Work through the page in chunks, stopping as soon as there are enough
+      // confirmed-deliverable products, so a normal page costs about 2x its size
+      // in AliExpress calls instead of 2x everything the search returned.
+      for (let at = 0; at < unseen.length; at += Math.max(limit, 8)) {
+        // Search results often carry no purchasable option, and shipping can only
+        // be quoted for one. Without this step most results had "unknown"
+        // shipping and were filtered out, leaving searches empty.
+        const fresh = await attachSkus(unseen.slice(at, at + Math.max(limit, 8)));
+        let freights = withShipping ? await quoteFreightForAll(fresh) : fresh.map(() => null);
+        // Passing errors happen in bursts. Ask again, once, for the misses.
+        const missed = withShipping ? freights.map((f, k) => (f ? -1 : k)).filter((k) => k >= 0 && fresh[k].skuId) : [];
+        if (missed.length) {
+          await new Promise((r) => setTimeout(r, 600));
+          const again = await quoteFreightForAll(missed.map((k) => fresh[k]));
+          freights = freights.slice();
+          missed.forEach((k, n) => { freights[k] = again[n]; });
+        }
+        priced.push(...priceProducts(fresh, freights));
+
+        // Only products AliExpress has confirmed it will deliver to Uganda are
+        // listed. A shipping lookup that failed or timed out counts as not
+        // confirmed: showing those let items through that turn out to be
+        // undeliverable once opened.
+        shown = dropUndeliverable ? priced.filter((p) => p.shipping.deliverable === true) : priced;
+        if (dropUndeliverable && shown.length >= limit) break;
+      }
       if (shown.length >= limit) break;
     }
     shown = dropUndeliverable ? shown.slice(0, limit) : shown;
+
+    // Nothing confirmed, but only because shipping lookups were being refused
+    // (AliExpress rate limit) — say so, rather than claim nothing was found.
+    if (dropUndeliverable && shown.length === 0 && priced.some((p) => p.shipping.deliverable === null)) {
+      return NextResponse.json(
+        { error: 'Search is busy right now.', message: 'Please try again in a few seconds.' },
+        { status: 503, headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
 
     return NextResponse.json({
       success: true,

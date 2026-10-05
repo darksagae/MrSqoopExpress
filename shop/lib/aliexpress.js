@@ -23,6 +23,31 @@ import { CUSTOMER_DESTINATION } from './shipping-destination.js';
  * Docs: https://openservice.aliexpress.com/doc/api.htm
  */
 
+// ---- Client-side pacing -----------------------------------------------------
+// AliExpress bans an app for several seconds when it calls too fast, and a ban
+// fails every call made during it. So calls from this instance are spaced out,
+// and while a ban is known to be running new calls wait or fail fast.
+const MIN_GAP_MS = 90;
+const MAX_WAIT_S = 4;
+let nextSlot = 0;
+let bannedUntil = 0;
+
+async function throttle() {
+  const now = Date.now();
+  if (now < bannedUntil) {
+    const remaining = bannedUntil - now;
+    if (remaining > MAX_WAIT_S * 1000) {
+      const err = new Error(`AliExpress is rate-limiting this app (${Math.ceil(remaining / 1000)}s left)`);
+      err.code = 'RATE_LIMITED';
+      throw err;
+    }
+    await new Promise((r) => setTimeout(r, remaining + 50));
+  }
+  const slot = Math.max(Date.now(), nextSlot);
+  nextSlot = slot + MIN_GAP_MS;
+  if (slot > Date.now()) await new Promise((r) => setTimeout(r, slot - Date.now()));
+}
+
 const GATEWAY = process.env.ALIEXPRESS_API_ENDPOINT || 'https://api-sg.aliexpress.com/sync';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -192,6 +217,7 @@ export class AliExpressDS {
     };
     params.sign = this.sign(params);
 
+    await throttle();
     const url = `${GATEWAY}?${new URLSearchParams(params).toString()}`;
     const res = await fetch(url, { method: 'POST' });
 
@@ -221,6 +247,22 @@ export class AliExpressDS {
       if (tokenExpired && !_retried) {
         console.warn('[aliexpress] access token rejected — forcing refresh and retrying once');
         return this.call(method, businessParams, true);
+      }
+
+      // "The frequency of app access to the api exceeds the limit. This ban will
+      // last N seconds": back off for that long instead of hammering on, which
+      // only extends the ban and fails every request in the meantime.
+      const banned = /frequency of app access|exceeds the limit/i.test(`${e.msg} ${e.sub_msg}`);
+      if (banned) {
+        const secs = Number(/last (\d+) second/i.exec(e.msg || '')?.[1]) || 10;
+        bannedUntil = Math.max(bannedUntil, Date.now() + secs * 1000);
+        if (secs <= MAX_WAIT_S && !_retried) {
+          await new Promise((r) => setTimeout(r, secs * 1000 + 100));
+          return this.call(method, businessParams, true);
+        }
+        const limited = new Error(`AliExpress is rate-limiting this app (${secs}s)`);
+        limited.code = 'RATE_LIMITED';
+        throw limited;
       }
 
       const err = new Error(`AliExpress API error: ${e.msg || e.sub_msg || 'unknown'} (code ${e.code})`);

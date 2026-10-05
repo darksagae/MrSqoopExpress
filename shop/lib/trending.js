@@ -170,7 +170,7 @@ async function fromCategories({ page, pageSize }) {
   return { source: 'categories', products: interleave(lists, pageSize) };
 }
 
-const SKU_LOOKUP_CONCURRENCY = 12;
+const SKU_LOOKUP_CONCURRENCY = 6;
 const OPTION_TTL_MS = 6 * 60 * 60 * 1000;
 
 // Which option to list a product at, remembered so the same best sellers aren't

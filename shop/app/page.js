@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import HomeClient from './HomeClient';
+import HomeSeo from './components/HomeSeo';
 import { aliexpressDS } from '@/lib/aliexpress';
 import { getBestPicks } from '@/lib/best-picks';
 
@@ -7,6 +8,13 @@ import { getBestPicks } from '@/lib/best-picks';
 // it, then rebuilt in the background at most every 30 minutes. Visitors get
 // ready-made HTML from the CDN instead of waiting on AliExpress.
 export const revalidate = 1800;
+
+export const metadata = {
+  title: { absolute: 'Mr Sqoop Express | Online Shopping & Delivery in Uganda' },
+  description:
+    'Shop online with Mr Sqoop Express and get your orders delivered to Uganda. Shop from international stores, enjoy reliable shipping and easy order tracking.',
+  alternates: { canonical: '/' },
+};
 
 async function loadInitial() {
   if (!aliexpressDS.hasCredentials()) return null;
@@ -31,8 +39,11 @@ async function loadInitial() {
 export default async function Home() {
   // HomeClient reads the search from the URL, which needs a Suspense boundary.
   return (
-    <Suspense fallback={null}>
-      <HomeClient initial={await loadInitial()} />
-    </Suspense>
+    <>
+      <Suspense fallback={null}>
+        <HomeClient initial={await loadInitial()} />
+      </Suspense>
+      <HomeSeo />
+    </>
   );
 }

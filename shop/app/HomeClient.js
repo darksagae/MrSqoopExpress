@@ -425,6 +425,12 @@ export default function HomeClient({ initial = null }) {
 
   return (
     <>
+      {/* ===== Intro: what the shop is (the page's H1) ===== */}
+      <header className="home-intro">
+        <h1>Shop Online. Get Your Orders Delivered to Uganda.</h1>
+        <p>You shop. We ship. You smile.</p>
+      </header>
+
       {/* ===== Search bar ===== */}
       <div className="top-search">
         <form className="sb" onSubmit={submitSearch} role="search">

@@ -1,5 +1,7 @@
 export const metadata = {
-  title: 'Privacy Policy — MrSqoopExpress',
+  title: 'Privacy Policy',
+  description: 'How Mr Sqoop Express collects, uses and protects your personal information when you shop and have orders delivered to Uganda.',
+  alternates: { canonical: '/privacy' },
 };
 
 export default function PrivacyPolicy() {

@@ -1,5 +1,7 @@
 export const metadata = {
-  title: 'Return Policy — MrSqoopExpress',
+  title: 'Return Policy',
+  description: 'Read the Mr Sqoop Express return policy: cancelling before dispatch, damaged or wrong items, and how refunds work for orders shipped to Uganda.',
+  alternates: { canonical: '/returns' },
 };
 
 export default function ReturnPolicy() {

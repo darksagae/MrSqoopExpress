@@ -22,6 +22,7 @@ img { display: block; max-width: 100%; }
   font-size: 12px;
   letter-spacing: .3px;
 }
+.announcement p { margin: 0; padding: 8px 14px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 .marquee {
   display: inline-flex;
   gap: 60px;
@@ -1687,3 +1688,18 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
 .co-promo-ok { margin-top: 8px; font-size: 13px; color: #1f7a45; }
 .co-promo-err { margin-top: 8px; font-size: 13px; color: #b3261e; }
 .co-promo-line span:last-child { color: #1f7a45; font-weight: 600; }
+
+/* ===== Home intro and text sections (SEO) ===== */
+.home-intro { max-width: 1200px; margin: 0 auto; padding: 22px 40px 0; }
+.home-intro h1 { font-size: 24px; line-height: 1.25; font-weight: 700; letter-spacing: -.2px; }
+.home-intro p { margin-top: 4px; font-size: 14px; color: #777; letter-spacing: .4px; }
+@media (max-width: 640px) { .home-intro { padding: 18px 18px 0; } .home-intro h1 { font-size: 20px; } }
+.seo-block { padding-top: 36px; padding-bottom: 12px; }
+.seo-grid { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.seo-grid li { padding: 16px; border: 1px solid #eee; border-radius: 14px; }
+.seo-grid h3, .seo-steps h3 { font-size: 16px; margin-bottom: 4px; }
+.seo-grid p, .seo-steps p, .seo-lead { font-size: 14px; color: #555; line-height: 1.55; }
+.seo-steps { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 14px; }
+.seo-steps li { display: flex; gap: 14px; align-items: flex-start; }
+.seo-n { flex: none; width: 30px; height: 30px; border-radius: 50%; background: #111; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px; }
+.seo-lead a { color: #2b59d9; text-decoration: underline; }

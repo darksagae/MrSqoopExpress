@@ -9,13 +9,7 @@ export default function SiteHeader() {
 
   return (
     <>
-      <div className="announcement">
-        <div className="marquee">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <span key={i}>express shipping to Uganda within 7-15 business days</span>
-          ))}
-        </div>
-      </div>
+      <div className="announcement"><p>Shipping to Uganda · delivery time shown on every product</p></div>
 
       <header className="header">
         <nav className="nav-left">

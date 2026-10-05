@@ -58,6 +58,13 @@ export interface AdminOrder extends Order {
   payment: OrderPayment | null
   items: OrderItem[]
   review: OrderReview | null
+  promo: OrderPromo | null
+}
+
+/** A promo code the customer used; the discount came off the product prices. */
+export interface OrderPromo {
+  code: string
+  discountUgx: number
 }
 
 const REVIEW_STATUSES: readonly string[] = ['pending', 'confirmed', 'on_hold', 'cancelled']
@@ -88,6 +95,8 @@ type OrderRow = {
   admin_status?: string | null
   admin_status_at?: string | Date | null
   admin_note?: string | null
+  promo_code?: string | null
+  discount_ugx?: number | string | null
 }
 
 const PAYMENT_METHODS: readonly string[] = ['mtn', 'airtel', 'card']
@@ -111,7 +120,9 @@ function ensureOrderColumns(): Promise<boolean> {
             ADD COLUMN IF NOT EXISTS order_items JSONB,
             ADD COLUMN IF NOT EXISTS admin_status TEXT,
             ADD COLUMN IF NOT EXISTS admin_status_at TIMESTAMPTZ,
-            ADD COLUMN IF NOT EXISTS admin_note TEXT
+            ADD COLUMN IF NOT EXISTS admin_note TEXT,
+            ADD COLUMN IF NOT EXISTS promo_code TEXT,
+            ADD COLUMN IF NOT EXISTS discount_ugx BIGINT
         `
         return true
       } catch (error) {
@@ -182,6 +193,9 @@ function rowToAdminOrder(row: OrderRow): AdminOrder {
             note: row.admin_note ?? null,
           }
         : null,
+    promo: row.promo_code
+      ? { code: row.promo_code, discountUgx: Number(row.discount_ugx) || 0 }
+      : null,
   }
 }
 
@@ -230,6 +244,7 @@ export async function createOrder(input: {
   billingUgx: number
   payment?: { method: PaymentMethod | null; ref: string | null; paidAt: string | null }
   items?: OrderItem[]
+  promo?: OrderPromo
 }) {
   const trackingId = normalizeTrackingId(input.trackingId)
   if (!trackingId) {
@@ -265,7 +280,9 @@ export async function createOrder(input: {
           payment_ref,
           paid_at,
           order_items,
-          admin_status
+          admin_status,
+          promo_code,
+          discount_ugx
         )
         VALUES (
           ${trackingId},
@@ -280,7 +297,9 @@ export async function createOrder(input: {
           ${input.payment?.ref ?? null},
           ${input.payment?.paidAt ?? null},
           ${JSON.stringify(input.items ?? [])}::jsonb,
-          ${input.payment ? 'pending' : null}
+          ${input.payment ? 'pending' : null},
+          ${input.promo?.code ?? null},
+          ${input.promo?.discountUgx ?? null}
         )
         RETURNING *
       `

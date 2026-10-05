@@ -1674,3 +1674,16 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
 .promo-img { display: block; flex-basis: 100%; border-radius: 16px; overflow: hidden; background: #f3f3f6; line-height: 0; }
 .promo-img img { width: 100%; height: auto; display: block; }
 .promo-line:empty { display: none; }
+
+/* ===== Promo code at checkout ===== */
+.co-promo { margin-top: 16px; padding-top: 14px; border-top: 1px solid #eee; }
+.co-promo-row { display: flex; gap: 8px; }
+.co-promo-row input { flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid #ddd; border-radius: 10px; font: inherit; font-size: 15px; letter-spacing: .5px; }
+.co-promo-row input:focus { outline: none; border-color: #111; }
+.co-promo-row button, .co-promo-applied button { padding: 0 18px; border: 0; border-radius: 10px; background: #111; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.co-promo-row button:disabled { opacity: .45; cursor: default; }
+.co-promo-applied { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 10px; background: #eaf7ef; color: #1f7a45; font-size: 14px; }
+.co-promo-applied button { background: none; color: #b3261e; padding: 4px 8px; }
+.co-promo-ok { margin-top: 8px; font-size: 13px; color: #1f7a45; }
+.co-promo-err { margin-top: 8px; font-size: 13px; color: #b3261e; }
+.co-promo-line span:last-child { color: #1f7a45; font-weight: 600; }

@@ -192,6 +192,29 @@ export function ShopSettings() {
                 )}
               </div>
             </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm text-neutral-400">
+                Discount for this code (% off product prices)
+                <input
+                  type="number"
+                  min={0}
+                  max={90}
+                  step="any"
+                  value={form.promo.discountPercent ?? 0}
+                  onChange={(e) => setForm({ ...form, promo: { ...form.promo, discountPercent: Number(e.target.value) } })}
+                  className={input}
+                />
+              </label>
+              <label className="grid gap-1 text-sm text-neutral-400">
+                Last day the code works (optional)
+                <input
+                  type="date"
+                  value={form.promo.endsAt ?? ''}
+                  onChange={(e) => setForm({ ...form, promo: { ...form.promo, endsAt: e.target.value } })}
+                  className={input}
+                />
+              </label>
+            </div>
             <label className="grid gap-1 text-sm text-neutral-400">
               Condition: minimum order total (UGX, 0 = no condition)
               <input
@@ -204,8 +227,9 @@ export function ShopSettings() {
               />
             </label>
             <p className="text-xs text-neutral-500">
-              Shown on the home page and under the shipping box on product pages. The banner only displays the code;
-              it does not discount the total. With a minimum set, it adds “Valid on orders over UGX …” underneath.
+              Customers type the code at checkout. It takes the discount % off the product prices (shipping and
+              handling are charged in full), only on orders at or above the minimum, and stops working after the
+              last day. Set the discount to 0 to show the banner without a working code.
             </p>
           </div>
 

@@ -59,6 +59,8 @@ export function ensureAccountColumns() {
         const sql = getSql();
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id TEXT`;
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT`;
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT`;
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_ugx BIGINT NOT NULL DEFAULT 0`;
         await sql`CREATE INDEX IF NOT EXISTS orders_user_idx ON orders (user_id, created_at DESC) WHERE user_id IS NOT NULL`;
         return true;
       } catch (e) {
@@ -76,13 +78,14 @@ export function newOrderId() {
   return 'MSE-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
 }
 
-export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef, userId, customerEmail }) {
+export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef, userId, customerEmail, promoCode, discountUGX }) {
   const sql = getSql();
-  if (userId && (await ensureAccountColumns())) {
+  if (await ensureAccountColumns()) {
     const linked = await sql`
-      INSERT INTO orders (id, customer_name, customer_phone, network, amount_ugx, items, payment_ref, user_id, customer_email)
+      INSERT INTO orders (id, customer_name, customer_phone, network, amount_ugx, items, payment_ref, user_id, customer_email, promo_code, discount_ugx)
       VALUES (${orderId}, ${customerName}, ${customerPhone}, ${network}, ${amountUGX},
-              ${JSON.stringify(items || [])}::jsonb, ${paymentRef || null}, ${userId}, ${customerEmail || null})
+              ${JSON.stringify(items || [])}::jsonb, ${paymentRef || null}, ${userId || null}, ${customerEmail || null},
+              ${promoCode || null}, ${discountUGX || 0})
       RETURNING *
     `;
     return linked[0];

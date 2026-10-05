@@ -64,6 +64,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       billingUgx: Number(billingUgx) || 0,
       payment: cleanPayment(req.body ?? {}),
       items: cleanItems(req.body?.items),
+      promo: req.body?.promoCode
+        ? { code: text(req.body.promoCode, 30), discountUgx: whole(req.body.discountUgx) }
+        : undefined,
     })
 
     // Duplicate tracking id → the order already exists; report success so the

@@ -68,6 +68,9 @@ export async function syncOrderToTracking(order) {
         paymentRef: order.payment_ref || null,
         paidAt: order.paid_at ? new Date(order.paid_at).toISOString() : null,
         items: buildIngestItems(order.items),
+        // A promo code reduces what was paid below goods + shipping + handling.
+        promoCode: order.promo_code || null,
+        discountUgx: Number(order.discount_ugx) || 0,
       }),
       signal: controller.signal,
     });

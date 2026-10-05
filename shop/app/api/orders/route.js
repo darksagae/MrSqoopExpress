@@ -34,7 +34,7 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Please log in to place your order.', code: 'LOGIN_REQUIRED' }, { status: 401 });
   }
 
-  const { customer = {}, network, items = [], total } = body;
+  const { customer = {}, network, items = [], total, promoCode } = body;
 
   // Validate.
   if (!customer.name || !customer.phone) {
@@ -72,9 +72,9 @@ export async function POST(request) {
   }
 
   // The amount charged is always our own re-priced total, never the browser's.
-  const priced = await confirmCartTotal(items, total);
+  const priced = await confirmCartTotal(items, total, { promoCode });
   if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
-  const { lines, total: amountUGX } = priced;
+  const { lines, total: amountUGX, promo } = priced;
 
   const orderId = newOrderId();
 
@@ -90,6 +90,8 @@ export async function POST(request) {
       items: lines,
       userId: account?.id,
       customerEmail: account?.email,
+      promoCode: promo?.code,
+      discountUGX: promo?.discountUGX,
       paymentRef: null,
     });
   } catch (dbError) {

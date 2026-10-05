@@ -52,25 +52,62 @@ export default function CheckoutPage() {
   // basket before the customer pays, so the total they see is the total charged.
   const quoteKey = items.map((c) => `${c.id}:${c.skuId}:${c.qty}`).join('|');
   const [quoteError, setQuoteError] = useState(null);
+  // Promo code: what is typed, what was applied, and the server's verdict.
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedCode, setAppliedCode] = useState('');
+  const [promo, setPromo] = useState(null); // { code, percent, discountUGX }
+  const [promoMsg, setPromoMsg] = useState(null);
+  const [promoBusy, setPromoBusy] = useState(false);
   useEffect(() => {
     if (authStatus !== 'authenticated' || !items.length) return undefined;
     let stale = false;
     setQuoteError(null);
+    if (appliedCode) setPromoBusy(true);
     fetch('/api/cart/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: items.map((c) => ({ id: c.id, skuId: c.skuId, qty: c.qty, name: c.name, img: c.img })) }),
+      body: JSON.stringify({
+        items: items.map((c) => ({ id: c.id, skuId: c.skuId, qty: c.qty, name: c.name, img: c.img })),
+        promoCode: appliedCode || undefined,
+      }),
     })
       .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
       .then(({ ok, d }) => {
         if (stale) return;
-        if (ok) reprice(d.items);
-        else setQuoteError(d.error);
+        if (!ok) { setQuoteError(d.error); return; }
+        reprice(d.items);
+        if (d.promo) {
+          setPromo(d.promo);
+          setPromoMsg({ ok: true, text: `${d.promo.code} applied: ${d.promo.percent}% off your items.` });
+        } else {
+          setPromo(null);
+          if (appliedCode) {
+            setAppliedCode('');
+            setPromoMsg({ ok: false, text: d.promoError || 'That promo code is not valid.' });
+          }
+        }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (!stale) setPromoBusy(false); });
     return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quoteKey, authStatus]);
+  }, [quoteKey, authStatus, appliedCode]);
+
+  const applyPromo = () => {
+    const code = promoInput.trim().toUpperCase();
+    if (!code) return;
+    setPromoMsg(null);
+    if (code === appliedCode) return;
+    setAppliedCode(code);
+  };
+  const removePromo = () => {
+    setAppliedCode('');
+    setPromo(null);
+    setPromoInput('');
+    setPromoMsg(null);
+  };
+  // What the customer actually pays, after the promo.
+  const payTotal = total - (promo?.discountUGX || 0);
 
   // Start the name from the account, still editable (the payer may differ).
   useEffect(() => {
@@ -145,12 +182,14 @@ export default function CheckoutPage() {
           body: JSON.stringify({
             customer: { name: name.trim(), phone: phone.trim() },
             items,
-            total,
+            total: payTotal,
+            promoCode: promo?.code,
           }),
         });
         const data = await res.json();
         if (!res.ok) {
-          if (data.code === 'PRICE_CHANGED' && data.items) reprice(data.items);
+          if (data.code === 'PRICE_CHANGED' && data.items) { reprice(data.items); setPromo(data.promo || null); }
+          if (data.code === 'PROMO_INVALID') { removePromo(); }
           setError(data.error);
           setSubmitting(false);
           return;
@@ -172,12 +211,14 @@ export default function CheckoutPage() {
           customer: { name: name.trim(), phone: phone.trim() },
           network,
           items,
-          total,
+          total: payTotal,
+          promoCode: promo?.code,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.code === 'PRICE_CHANGED' && data.items) reprice(data.items);
+        if (data.code === 'PRICE_CHANGED' && data.items) { reprice(data.items); setPromo(data.promo || null); }
+        if (data.code === 'PROMO_INVALID') removePromo();
         if (data.code === 'NETWORK_MISMATCH' && data.network) setNetwork(data.network);
         setError(data.error);
         return;
@@ -335,7 +376,7 @@ export default function CheckoutPage() {
           <button className="btn-dark co-pay" disabled={submitting}>
             {submitting
               ? network === 'card' ? 'Opening card payment…' : 'Sending prompt…'
-              : `Pay ${fmt(total)}`}
+              : `Pay ${fmt(payTotal)}`}
           </button>
         </form>
 
@@ -377,7 +418,37 @@ export default function CheckoutPage() {
               <span>{fmt(handling)}</span>
             </div>
           )}
-          <div className="co-summary-row total"><span>Total</span><span>{fmt(total)}</span></div>
+          {promo && (
+            <div className="co-summary-row co-promo-line">
+              <span>Promo {promo.code} ({promo.percent}% off items)</span>
+              <span>−{fmt(promo.discountUGX)}</span>
+            </div>
+          )}
+          <div className="co-summary-row total"><span>Total</span><span>{fmt(payTotal)}</span></div>
+
+          <div className="co-promo">
+            {promo ? (
+              <div className="co-promo-applied">
+                <span>Code <strong>{promo.code}</strong> applied</span>
+                <button type="button" onClick={removePromo}>Remove</button>
+              </div>
+            ) : (
+              <div className="co-promo-row">
+                <input
+                  value={promoInput}
+                  onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyPromo(); } }}
+                  placeholder="Promo code"
+                  aria-label="Promo code"
+                  autoCapitalize="characters"
+                />
+                <button type="button" onClick={applyPromo} disabled={promoBusy || !promoInput.trim()}>
+                  {promoBusy ? 'Checking…' : 'Apply'}
+                </button>
+              </div>
+            )}
+            {promoMsg && <p className={promoMsg.ok ? 'co-promo-ok' : 'co-promo-err'}>{promoMsg.text}</p>}
+          </div>
         </aside>
       </div>
     </div>

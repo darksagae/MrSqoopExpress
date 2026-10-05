@@ -62,6 +62,7 @@ export interface Order {
   payment?: OrderPayment | null
   items?: OrderItem[]
   review?: OrderReview | null
+  promo?: { code: string; discountUgx: number } | null
 }
 
 export interface TrackingStepView {

@@ -358,9 +358,15 @@ function PaymentAndItems({ order }: { order: Order }) {
                 <dt>Handling</dt>
                 <dd className="text-neutral-300">{formatUgx(breakdown.handling)}</dd>
               </div>
+              {order.promo && order.promo.discountUgx > 0 && (
+                <div className="flex justify-between">
+                  <dt>Promo {order.promo.code}</dt>
+                  <dd className="text-green-400">−{formatUgx(order.promo.discountUgx)}</dd>
+                </div>
+              )}
               <div className="flex justify-between font-semibold text-neutral-200">
                 <dt>Paid by customer</dt>
-                <dd>{formatUgx(breakdown.total)}</dd>
+                <dd>{formatUgx(breakdown.total - (order.promo?.discountUgx ?? 0))}</dd>
               </div>
             </dl>
           )}

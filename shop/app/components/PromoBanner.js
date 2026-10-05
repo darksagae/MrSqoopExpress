@@ -45,9 +45,12 @@ export default function PromoBanner({ className = '' }) {
           <span className="promo-copy">{copied ? 'Copied' : 'Copy'}</span>
         </button>
       )}
-      {promo.minOrder > 0 && (
+      {(promo.minOrder > 0 || promo.endsAt) && (
         <span className="promo-cond">
-          Valid on orders over UGX {Number(promo.minOrder).toLocaleString('en-US')}
+          {promo.minOrder > 0 && `Valid on orders over UGX ${Number(promo.minOrder).toLocaleString('en-US')}`}
+          {promo.minOrder > 0 && promo.endsAt && ' · '}
+          {promo.endsAt && `Ends ${new Date(`${promo.endsAt}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`}
+          {promo.code && ' · Enter the code at checkout'}
         </span>
       )}
     </div>

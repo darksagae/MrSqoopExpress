@@ -196,7 +196,7 @@ export { ApiError }
 export interface ShopSettings {
   rate: number
   handlingPercent: number
-  promo: { enabled: boolean; code: string; text: string; minOrder: number }
+  promo: { enabled: boolean; code: string; text: string; minOrder: number; discountPercent: number; endsAt: string }
   promoImageVersion: number
 }
 

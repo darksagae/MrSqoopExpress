@@ -16,8 +16,21 @@ export async function POST(request) {
     return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
   try {
-    const { lines, total } = await priceCart(body?.items);
-    return NextResponse.json({ items: lines, total }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const promoCode = body?.promoCode;
+    let priced;
+    let promoError = null;
+    try {
+      priced = await priceCart(body?.items, { promoCode });
+    } catch (e) {
+      // A code that does not apply still gets a normal quote, with the reason.
+      if (e?.code !== 'PROMO_INVALID') throw e;
+      promoError = e.message;
+      priced = await priceCart(body?.items);
+    }
+    return NextResponse.json(
+      { items: priced.lines, total: priced.total, subtotalBeforeDiscount: priced.subtotalBeforeDiscount, promo: priced.promo, promoError },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (e) {
     if (e instanceof CartProblem) return NextResponse.json({ error: e.message }, { status: 409 });
     console.error('[quote] failed:', e.message);

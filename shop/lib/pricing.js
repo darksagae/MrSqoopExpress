@@ -1,6 +1,7 @@
 import { aliexpressDS } from './aliexpress.js';
 import { handlingFee } from './shipping-destination.js';
 import { currentSettings, loadSettings } from './settings.js';
+import { evaluatePromo } from './promo.js';
 
 /**
  * The one place USD supplier prices become UGX. The catalogue, the product
@@ -81,14 +82,30 @@ async function priceLine(item) {
  * @throws {CartProblem} when an item can't be sold as requested
  * @returns {{ lines: object[], total: number }}
  */
-export async function priceCart(items) {
+export async function priceCart(items, { promoCode } = {}) {
   await loadSettings();
   if (!Array.isArray(items) || !items.length) throw new CartProblem('Your cart is empty.');
   if (items.length > MAX_LINES) throw new CartProblem('Your cart has too many items for one order.');
 
   const lines = await Promise.all(items.map(priceLine));
-  const total = lines.reduce((s, l) => s + l.qty * (l.price + l.shipUGX + l.handlingUGX), 0);
-  return { lines, total };
+  const before = lines.reduce((s, l) => s + l.qty * (l.price + l.shipUGX + l.handlingUGX), 0);
+  const goods = lines.reduce((s, l) => s + l.qty * l.price, 0);
+
+  // A promo code, if one was entered. An entered code that does not apply is an
+  // error the shopper must see: silently charging full price after they typed
+  // a code would be a nasty surprise.
+  let promo = null;
+  if (promoCode && String(promoCode).trim()) {
+    const r = evaluatePromo(promoCode, { goods, total: before });
+    if (!r.ok) {
+      const err = new CartProblem(r.error);
+      err.code = 'PROMO_INVALID';
+      throw err;
+    }
+    promo = { code: r.code, percent: r.percent, discountUGX: r.discountUGX };
+  }
+  const total = before - (promo?.discountUGX || 0);
+  return { lines, total, subtotalBeforeDiscount: before, promo };
 }
 
 /**
@@ -96,12 +113,12 @@ export async function priceCart(items) {
  * was shown a different total. Returns either { lines, total } or
  * { response } with the JSON body and status to send back.
  */
-export async function confirmCartTotal(items, clientTotal) {
+export async function confirmCartTotal(items, clientTotal, { promoCode } = {}) {
   let priced;
   try {
-    priced = await priceCart(items);
+    priced = await priceCart(items, { promoCode });
   } catch (e) {
-    if (e instanceof CartProblem) return { response: { status: 409, body: { error: e.message } } };
+    if (e instanceof CartProblem) return { response: { status: 409, body: { error: e.message, code: e.code || 'CART_PROBLEM' } } };
     console.error('[PRICING] could not re-price cart:', e.code, e.message);
     return {
       response: {
@@ -120,6 +137,7 @@ export async function confirmCartTotal(items, clientTotal) {
           code: 'PRICE_CHANGED',
           items: priced.lines,
           total: priced.total,
+          promo: priced.promo,
         },
       },
     };

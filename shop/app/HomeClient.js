@@ -137,8 +137,17 @@ function useFeed(query, initial) {
     setLoading(true);
     setError(null);
     setPage(1);
-    fetch(urlFor(1))
-      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+    // An empty first answer is retried once, bypassing any cached copy.
+    const first = () =>
+      fetch(urlFor(1))
+        .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
+        .then((res) => {
+          if (res.ok && !(res.d.products || []).length) {
+            return fetch(`${urlFor(1)}&_=${Date.now()}`).then((r) => r.json().then((d) => ({ ok: r.ok, d })));
+          }
+          return res;
+        });
+    first()
       .then(({ ok, d }) => {
         if (cancelled) return;
         if (!ok) {
@@ -213,8 +222,11 @@ function CategoryRow({ cat, onAdd, onViewAll }) {
     let cancelled = false;
     const load = () => {
       setState({ status: 'loading', items: [] });
-      fetch(`/api/products?keyword=${encodeURIComponent(cat.keyword)}&page=1&limit=${ROW_SIZE}`)
+      const url = `/api/products?keyword=${encodeURIComponent(cat.keyword)}&page=1&limit=${ROW_SIZE}`;
+      fetch(url)
         .then((r) => (r.ok ? r.json() : null))
+        // An empty or failed first answer gets one more try, past any cached copy.
+        .then((d) => (d?.products?.length ? d : fetch(`${url}&_=${Date.now()}`).then((r) => (r.ok ? r.json() : null))))
         .then((d) => {
           if (cancelled) return;
           const items = d?.products || [];

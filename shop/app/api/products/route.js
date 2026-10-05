@@ -129,7 +129,18 @@ export async function GET(request) {
       destination: { ...CUSTOMER_DESTINATION, label: CUSTOMER_DESTINATION_LABEL },
       handlingFeePercent: handlingPercent(),
       products: shown,
-    }, { headers: { 'Cache-Control': SEARCH_CACHE } });
+    }, {
+      headers: {
+        // Never let the CDN keep an empty or thin answer: a lookup that came back
+        // short once (AliExpress hiccup, deploy in progress) would otherwise be
+        // served as "No products found" to everyone for up to an hour.
+        'Cache-Control': shown.length === 0
+          ? 'no-store'
+          : shown.length < Math.min(limit, 6)
+            ? 'public, s-maxage=30'
+            : SEARCH_CACHE,
+      },
+    });
   } catch (error) {
     console.error('AliExpress product fetch failed:', error);
     return NextResponse.json(

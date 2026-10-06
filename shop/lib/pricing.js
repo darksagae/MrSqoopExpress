@@ -115,7 +115,7 @@ export async function priceCart(items, { promoCode } = {}) {
       err.code = 'PROMO_INVALID';
       throw err;
     }
-    promo = { code: r.code, percent: r.percent, discountUGX: r.discountUGX };
+    promo = { code: r.code, discountUGX: r.discountUGX };
   }
   const total = before - (promo?.discountUGX || 0);
   return { lines, total, subtotalBeforeDiscount: before, promo };

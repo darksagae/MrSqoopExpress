@@ -55,7 +55,7 @@ export default function CheckoutPage() {
   // Promo code: what is typed, what was applied, and the server's verdict.
   const [promoInput, setPromoInput] = useState('');
   const [appliedCode, setAppliedCode] = useState('');
-  const [promo, setPromo] = useState(null); // { code, percent, discountUGX }
+  const [promo, setPromo] = useState(null); // { code, discountUGX }
   const [promoMsg, setPromoMsg] = useState(null);
   const [promoBusy, setPromoBusy] = useState(false);
   useEffect(() => {
@@ -78,7 +78,7 @@ export default function CheckoutPage() {
         reprice(d.items);
         if (d.promo) {
           setPromo(d.promo);
-          setPromoMsg({ ok: true, text: `${d.promo.code} applied: ${d.promo.percent}% off your items.` });
+          setPromoMsg({ ok: true, text: `${d.promo.code} applied: ${fmt(d.promo.discountUGX)} off your order.` });
         } else {
           setPromo(null);
           if (appliedCode) {
@@ -420,7 +420,7 @@ export default function CheckoutPage() {
           )}
           {promo && (
             <div className="co-summary-row co-promo-line">
-              <span>Promo {promo.code} ({promo.percent}% off items)</span>
+              <span>Promo {promo.code}</span>
               <span>−{fmt(promo.discountUGX)}</span>
             </div>
           )}

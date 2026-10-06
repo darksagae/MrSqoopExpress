@@ -18,7 +18,7 @@ const DEFAULTS = {
   rate: num(process.env.NEXT_PUBLIC_USD_TO_UGX_RATE, 3700),
   handlingPercent: num(process.env.NEXT_PUBLIC_HANDLING_FEE_PERCENT, 38),
   markupPercent: num(process.env.NEXT_PUBLIC_MARKUP_PERCENTAGE, 0),
-  promo: { enabled: false, code: '', text: '', minOrder: 0, discountPercent: 0, endsAt: '' },
+  promo: { enabled: false, code: '', text: '', minOrder: 0, discountUGX: 0, endsAt: '' },
   // Bumped whenever the banner image changes; 0 = no image.
   promoImageVersion: 0,
 };
@@ -70,16 +70,16 @@ export function validate(input = {}) {
       const min = Number(p.minOrder ?? 0);
       if (!Number.isFinite(min) || min < 0 || min > 100_000_000) errors.push('Minimum order must be a positive amount in UGX (or 0 for none).');
       else {
-        const pct = Number(p.discountPercent ?? 0);
+        const off = Number(p.discountUGX ?? 0);
         const endsAt = String(p.endsAt ?? '').trim();
-        if (!Number.isFinite(pct) || pct < 0 || pct > 90) errors.push('Discount must be between 0 and 90 %.');
+        if (!Number.isFinite(off) || off < 0 || off > 10_000_000) errors.push('Discount must be an amount in UGX between 0 and 10,000,000.');
         else if (endsAt && !/^\d{4}-\d{2}-\d{2}$/.test(endsAt)) errors.push('End date must be a date like 2026-10-30.');
         else out.promo = {
           enabled: Boolean(p.enabled),
           code,
           text,
           minOrder: Math.round(min),
-          discountPercent: Math.round(pct * 100) / 100,
+          discountUGX: Math.round(off),
           endsAt,
         };
       }

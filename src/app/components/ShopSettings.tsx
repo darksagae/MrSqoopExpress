@@ -143,7 +143,7 @@ export function ShopSettings() {
                 value={form.promo.text}
                 maxLength={120}
                 onChange={(e) => setForm({ ...form, promo: { ...form.promo, text: e.target.value } })}
-                placeholder="Offer text, e.g. 10% off your first order"
+                placeholder="Offer text, e.g. UGX 10,000 off your order"
                 className={input}
               />
               <input
@@ -194,14 +194,13 @@ export function ShopSettings() {
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1 text-sm text-neutral-400">
-                Discount for this code (% off product prices)
+                Discount for this code (UGX taken off the order)
                 <input
                   type="number"
                   min={0}
-                  max={90}
-                  step="any"
-                  value={form.promo.discountPercent ?? 0}
-                  onChange={(e) => setForm({ ...form, promo: { ...form.promo, discountPercent: Number(e.target.value) } })}
+                  step={500}
+                  value={form.promo.discountUGX ?? 0}
+                  onChange={(e) => setForm({ ...form, promo: { ...form.promo, discountUGX: Number(e.target.value) } })}
                   className={input}
                 />
               </label>
@@ -227,8 +226,8 @@ export function ShopSettings() {
               />
             </label>
             <p className="text-xs text-neutral-500">
-              Customers type the code at checkout. It takes the discount % off the product prices (shipping and
-              handling are charged in full), only on orders at or above the minimum, and stops working after the
+              Customers type the code at checkout. It takes the discount amount off the product prices (shipping and
+              handling are charged in full; the discount never exceeds the items' cost), only on orders at or above the minimum, and stops working after the
               last day. Set the discount to 0 to show the banner without a working code.
             </p>
           </div>

@@ -382,6 +382,7 @@ export default function HomeClient({ initial = null }) {
     window.dispatchEvent(new Event('mse:url'));
   };
   const rowRef = useRef(null);
+  const stripRef = useRef(null);
 
   const { add, setOpen } = useCart();
   const router = useRouter();
@@ -463,6 +464,40 @@ export default function HomeClient({ initial = null }) {
       if (top !== undefined) window.scrollTo({ top: window.scrollY + top - 70, behavior: 'smooth' });
     });
   }, [query]);
+
+  // Gentle motion: the category strip drifts sideways by itself and turns back at
+  // each end. It stops the moment someone touches, hovers or scrolls it, resumes
+  // a few seconds after they let go, and does nothing for people who have asked
+  // their device for reduced motion.
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    let raf = 0;
+    let dir = 1;
+    let pausedUntil = performance.now() + 1500;
+    let last = performance.now();
+    let pos = el.scrollLeft;
+    const SPEED = 22; // pixels per second
+    const hold = (ms = 4000) => { pausedUntil = performance.now() + ms; pos = el.scrollLeft; };
+    const tick = (now) => {
+      const dt = Math.min(now - last, 64) / 1000;
+      last = now;
+      const max = el.scrollWidth - el.clientWidth;
+      if (max > 4 && now > pausedUntil && !document.hidden) {
+        pos += dir * SPEED * dt;
+        if (pos >= max) { pos = max; dir = -1; pausedUntil = now + 1200; }
+        else if (pos <= 0) { pos = 0; dir = 1; pausedUntil = now + 1200; }
+        el.scrollLeft = pos;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    const events = ['pointerdown', 'touchstart', 'wheel', 'mouseenter', 'focusin'];
+    events.forEach((e) => el.addEventListener(e, () => hold(), { passive: true }));
+    el.addEventListener('mouseleave', () => hold(1200), { passive: true });
+    el.addEventListener('scroll', () => { if (performance.now() > pausedUntil - 3900) pos = el.scrollLeft; }, { passive: true });
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const pickCategory = (cat) => {
     runSearch(cat.keyword);
@@ -581,7 +616,7 @@ export default function HomeClient({ initial = null }) {
       {/* ===== Categories ===== */}
       <section className="section cat-section" id="categories">
         <h2 className="section-title">Browse by Category</h2>
-        <div className="cat-strip">
+        <div className="cat-strip" ref={stripRef}>
           {CATEGORIES.map((cat) => (
             <button
               type="button"

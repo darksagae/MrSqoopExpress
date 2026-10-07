@@ -1706,25 +1706,18 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
 .row-failed { font-size: 14px; color: #777; padding: 8px 0 14px; }
 .row-failed button { background: none; border: 0; font: inherit; font-weight: 600; color: #2b59d9; cursor: pointer; text-decoration: underline; }
 
-/* ===== Motion ===== */
-/* The strip is moved in small steps by script; snapping would fight it. */
-.cat-strip { scroll-snap-type: none; }
+/* ===== Motion (product rows under the categories) ===== */
+/* Rows are moved in small steps by script, so snapping would fight it. */
+.cat-row .hscroll { scroll-snap-type: none; }
 @keyframes rise-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-@keyframes tile-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-.cat-section .section-title { animation: rise-in .6s ease both; }
-.cat-tile { animation: rise-in .55s ease both; }
-.cat-tile:nth-child(6n+1) { animation-delay: .02s; } .cat-tile:nth-child(6n+2) { animation-delay: .08s; }
-.cat-tile:nth-child(6n+3) { animation-delay: .14s; } .cat-tile:nth-child(6n+4) { animation-delay: .20s; }
-.cat-tile:nth-child(6n+5) { animation-delay: .26s; } .cat-tile:nth-child(6n+6) { animation-delay: .32s; }
-/* After they arrive, the tiles bob a little, each out of step with its neighbour. */
-.cat-tile-img { animation: tile-float 4.5s ease-in-out infinite; }
-.cat-tile:nth-child(odd) .cat-tile-img { animation-delay: -1.2s; }
-.cat-tile:nth-child(3n) .cat-tile-img { animation-delay: -2.6s; }
-.cat-tile:hover .cat-tile-img, .cat-tile:active .cat-tile-img { animation-play-state: paused; transform: translateY(-6px) scale(1.04); }
 .cat-row { animation: rise-in .6s ease both; }
+.cat-row .pc { animation: rise-in .5s ease both; }
+.cat-row .pc:nth-child(1) { animation-delay: .05s; } .cat-row .pc:nth-child(2) { animation-delay: .12s; }
+.cat-row .pc:nth-child(3) { animation-delay: .19s; } .cat-row .pc:nth-child(4) { animation-delay: .26s; }
+.cat-row .pc:nth-child(n+5) { animation-delay: .32s; }
 .pc { transition: transform .25s ease; }
 .pc:hover { transform: translateY(-4px); }
 @media (prefers-reduced-motion: reduce) {
-  .cat-section .section-title, .cat-tile, .cat-tile-img, .cat-row { animation: none !important; }
+  .cat-row, .cat-row .pc { animation: none !important; }
   .pc, .pc:hover { transform: none; transition: none; }
 }

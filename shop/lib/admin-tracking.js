@@ -5,7 +5,10 @@
  * Best-effort and short-timeout: if it is unreachable the customer still sees
  * the shop's own status, never an error.
  */
-const BASE = process.env.TRACKING_API_URL || 'https://mrsqoopexpress.com';
+const configured = (process.env.TRACKING_API_URL || '').replace(/\/$/, '');
+const BASE = !configured || /^https?:\/\/(www\.)?mrsqoopexpress\.com$/i.test(configured)
+  ? 'https://control.mrsqoopexpress.com'
+  : configured;
 
 const STAGES = [
   'Order Confirmed',

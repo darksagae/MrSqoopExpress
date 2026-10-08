@@ -61,6 +61,7 @@ export function ensureAccountColumns() {
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id TEXT`;
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS customer_email TEXT`;
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT`;
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ`;
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_ugx BIGINT NOT NULL DEFAULT 0`;
         await sql`CREATE INDEX IF NOT EXISTS orders_user_idx ON orders (user_id, created_at DESC) WHERE user_id IS NOT NULL`;
         return true;
@@ -181,7 +182,8 @@ export async function settlePayment(paymentRef, status, { failureReason } = {}) 
     // Best-effort: syncOrderToTracking never throws.
     if (paid) {
       const synced = await syncOrderToTracking(order);
-      if (!synced) console.error('[settlePayment] tracking sync did not complete for', order.id);
+      if (synced) await markSynced(order.id);
+      else console.error('[settlePayment] tracking sync did not complete for', order.id);
       // The buyer's confirmation email, sent exactly once with this transition.
       // Best-effort: a mail hiccup must never undo a settled payment.
       if (order.customer_email && isEmailConfigured()) {
@@ -247,6 +249,31 @@ export async function listOrdersForUser(userId, { limit = 50 } = {}) {
      WHERE user_id = ${userId}
        AND NOT (payment_status = 'PENDING' AND created_at < now() - interval '1 day')
      ORDER BY created_at DESC
+     LIMIT ${limit}
+  `;
+}
+
+/** Record that the admin has this order, so the retry sweep can skip it. */
+export async function markSynced(orderId) {
+  try {
+    if (!(await ensureAccountColumns())) return;
+    await getSql()`UPDATE orders SET synced_at = now() WHERE id = ${orderId}`;
+  } catch (e) {
+    console.error('[orders] could not mark synced', orderId, e.message);
+  }
+}
+
+/**
+ * Paid orders the admin has not confirmed receiving yet, oldest first. The
+ * reconcile cron re-sends these until they land, so a failed push is never
+ * the end of an order.
+ */
+export async function listUnsynced({ limit = 25 } = {}) {
+  if (!(await ensureAccountColumns())) return [];
+  return getSql()`
+    SELECT * FROM orders
+     WHERE payment_status = 'SUCCESSFUL' AND synced_at IS NULL
+     ORDER BY paid_at ASC NULLS LAST
      LIMIT ${limit}
   `;
 }

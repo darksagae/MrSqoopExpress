@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listStalePending, listRecentPaid, settlePayment } from '@/lib/orders';
+import { listStalePending, listUnsynced, markSynced, settlePayment } from '@/lib/orders';
 import { syncOrderToTracking, isTrackingConfigured } from '@/lib/tracking';
 import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
 
@@ -44,16 +44,18 @@ export async function GET(request) {
     }
   }
 
-  // syncOrderToTracking only fires once, when an order first turns paid. If
-  // that single attempt failed (admin down, network blip) the order would never
-  // reach the dashboard, so recent paid orders are re-sent here. The admin
-  // treats a repeated order number as success, which makes this harmless.
+  // Any paid order the admin has not acknowledged is sent again until it lands.
+  // The admin treats a repeated order number as success, which makes this safe.
   let resync = null;
   if (isTrackingConfigured()) {
-    const paid = await listRecentPaid({ sinceHours: 6, limit: 25 });
-    const outcomes = await Promise.all(paid.map((o) => syncOrderToTracking(o)));
-    resync = { checked: paid.length, failed: outcomes.filter((ok) => !ok).length };
-    if (resync.failed) console.error('[RECONCILE] admin sync still failing for', resync.failed, 'order(s)');
+    const pending = await listUnsynced({ limit: 25 });
+    let failed = 0;
+    for (const o of pending) {
+      if (await syncOrderToTracking(o)) await markSynced(o.id);
+      else failed += 1;
+    }
+    resync = { checked: pending.length, failed };
+    if (failed) console.error('[RECONCILE] admin sync still failing for', failed, 'order(s)');
   }
 
   return NextResponse.json({ checked: stale.length, settled: results, adminSync: resync });

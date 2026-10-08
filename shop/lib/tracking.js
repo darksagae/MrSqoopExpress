@@ -6,11 +6,17 @@
  * shop's order id becomes the customer-facing tracking number.
  *
  * Env:
- *   TRACKING_API_URL     — base URL of the tracking site (default mrsqoopexpress.com)
+ *   TRACKING_API_URL     — base URL of the admin/tracking site (default control.mrsqoopexpress.com)
  *   ORDER_INGEST_SECRET  — shared secret matching the ingest endpoint
  */
 
-const BASE = process.env.TRACKING_API_URL || 'https://mrsqoopexpress.com';
+// The bare domain (mrsqoopexpress.com) now redirects to the shop, so it can no
+// longer be used to reach the admin: a redirected POST lands on the shop and
+// 404s, and the order never shows up for confirmation. Always talk to the
+// admin's own host.
+const ADMIN_HOST = 'https://control.mrsqoopexpress.com';
+const configured = (process.env.TRACKING_API_URL || '').replace(/\/$/, '');
+const BASE = !configured || /^https?:\/\/(www\.)?mrsqoopexpress\.com$/i.test(configured) ? ADMIN_HOST : configured;
 const SECRET = process.env.ORDER_INGEST_SECRET;
 
 export function isTrackingConfigured() {
@@ -73,6 +79,9 @@ export async function syncOrderToTracking(order) {
         discountUgx: Number(order.discount_ugx) || 0,
       }),
       signal: controller.signal,
+      // A redirect means the address points somewhere else (it did, silently,
+      // for days). Fail loudly instead of following it.
+      redirect: 'manual',
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');

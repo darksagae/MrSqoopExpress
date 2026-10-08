@@ -59,6 +59,14 @@ export interface AdminOrder extends Order {
   items: OrderItem[]
   review: OrderReview | null
   promo: OrderPromo | null
+  supplier: OrderSupplier | null
+}
+
+/** The order placed with the supplier for this customer order. */
+export interface OrderSupplier {
+  status: 'placing' | 'placed' | 'failed'
+  orderIds: string[]
+  error: string | null
 }
 
 /** A promo code the customer used; the discount came off the product prices. */
@@ -97,6 +105,9 @@ type OrderRow = {
   admin_note?: string | null
   promo_code?: string | null
   discount_ugx?: number | string | null
+  supplier_status?: string | null
+  supplier_order_ids?: string | null
+  supplier_error?: string | null
 }
 
 const PAYMENT_METHODS: readonly string[] = ['mtn', 'airtel', 'card']
@@ -122,7 +133,10 @@ function ensureOrderColumns(): Promise<boolean> {
             ADD COLUMN IF NOT EXISTS admin_status_at TIMESTAMPTZ,
             ADD COLUMN IF NOT EXISTS admin_note TEXT,
             ADD COLUMN IF NOT EXISTS promo_code TEXT,
-            ADD COLUMN IF NOT EXISTS discount_ugx BIGINT
+            ADD COLUMN IF NOT EXISTS discount_ugx BIGINT,
+            ADD COLUMN IF NOT EXISTS supplier_status TEXT,
+            ADD COLUMN IF NOT EXISTS supplier_order_ids TEXT,
+            ADD COLUMN IF NOT EXISTS supplier_error TEXT
         `
         return true
       } catch (error) {
@@ -196,6 +210,14 @@ function rowToAdminOrder(row: OrderRow): AdminOrder {
     promo: row.promo_code
       ? { code: row.promo_code, discountUgx: Number(row.discount_ugx) || 0 }
       : null,
+    supplier:
+      row.supplier_status === 'placing' || row.supplier_status === 'placed' || row.supplier_status === 'failed'
+        ? {
+            status: row.supplier_status,
+            orderIds: row.supplier_order_ids ? row.supplier_order_ids.split(',').filter(Boolean) : [],
+            error: row.supplier_error ?? null,
+          }
+        : null,
   }
 }
 
@@ -397,4 +419,25 @@ export async function reviewOrder(id: string, action: ReviewAction, note?: strin
 export async function deleteOrder(id: string) {
   const sql = getSql()
   await sql`DELETE FROM orders WHERE id = ${id}`
+}
+
+/** The order's current state, for actions that must check it first. */
+export async function getAdminOrder(id: string) {
+  await ensureOrderColumns()
+  const rows = await getSql()`SELECT * FROM orders WHERE id = ${id} LIMIT 1`
+  return rows.length ? rowToAdminOrder(rows[0] as OrderRow) : null
+}
+
+/** Record what the shop reported back after placing (or failing to place) the supplier order. */
+export async function setSupplierResult(id: string, supplier: { status: string; orderIds: string[]; error: string | null }) {
+  await ensureOrderColumns()
+  const rows = await getSql()`
+    UPDATE orders
+       SET supplier_status = ${supplier.status},
+           supplier_order_ids = ${supplier.orderIds.join(',') || null},
+           supplier_error = ${supplier.error}
+     WHERE id = ${id}
+    RETURNING *
+  `
+  return rows.length ? rowToAdminOrder(rows[0] as OrderRow) : null
 }

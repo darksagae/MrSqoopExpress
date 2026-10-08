@@ -227,3 +227,13 @@ export async function removePromoBanner(): Promise<void> {
   const response = await fetch('/api/settings-banner', { method: 'DELETE', headers: authHeaders(false) })
   await parseJson<{ ok: boolean }>(response)
 }
+
+export async function placeSupplierOrder(id: string): Promise<Order> {
+  const response = await fetch(`/api/orders/item?id=${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ placeSupplier: true }),
+  })
+  const data = await parseJson<{ order: Order }>(response)
+  return data.order
+}

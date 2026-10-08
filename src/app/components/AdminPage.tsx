@@ -10,6 +10,7 @@ import {
   deleteOrder,
   fetchAllOrders,
   migrateDatabase,
+  placeSupplierOrder,
   reviewOrder,
   updateOrderBilling,
 } from '../lib/ordersApi'
@@ -193,6 +194,74 @@ const REVIEW_PROMPTS: Record<ReviewAction, string> = {
   cancel: 'Cancel this order? The customer has already paid, so you must refund them in LipaPay or Absa.',
 }
 
+/** After confirming: place the order with the supplier, then pay it there. */
+function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const supplier = order.supplier
+
+  const place = async () => {
+    if (!confirm('Place this order on AliExpress now, shipped to the Dubai warehouse? You will then pay it in the AliExpress account.')) return
+    setBusy(true)
+    try {
+      await placeSupplierOrder(order.id)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not place the order. Try again.')
+    } finally {
+      await onUpdate()
+      setBusy(false)
+    }
+  }
+
+  if (supplier?.status === 'placed') {
+    return (
+      <div className="mt-2 text-sm text-neutral-300">
+        <p>
+          <span className="font-bold text-green-400">Placed on AliExpress</span> · order{' '}
+          {supplier.orderIds.join(', ')}
+        </p>
+        <p className="mt-1 text-neutral-400">
+          Now pay it in the AliExpress account:{' '}
+          <a
+            href="https://www.aliexpress.com/p/order/index.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline"
+            style={{ color: GOLD }}
+          >
+            open my AliExpress orders
+          </a>
+          .
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-2 text-sm text-neutral-400">
+      {supplier?.status === 'failed' && (
+        <p className="mb-2 text-red-300">Last attempt failed: {supplier.error || 'unknown error'}</p>
+      )}
+      {supplier?.status === 'placing' ? (
+        <p>Placing the order with AliExpress… refresh in a moment.</p>
+      ) : (
+        <>
+          <p>Next: place this order on AliExpress, shipped to the Dubai warehouse.</p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void place()}
+            className="mt-3 rounded-full px-4 py-2 text-sm font-bold text-black disabled:opacity-60"
+            style={{ backgroundColor: GOLD }}
+          >
+            {busy ? 'Placing…' : supplier?.status === 'failed' ? 'Try placing again' : 'Place order on AliExpress'}
+          </button>
+          <p className="mt-2 text-xs text-neutral-500">Or buy it by hand using the links below.</p>
+        </>
+      )}
+    </div>
+  )
+}
+
 function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
   const review = order.review
@@ -230,11 +299,7 @@ function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promis
           Paid. Check the price and stock on AliExpress, then confirm.
         </p>
       )}
-      {review.status === 'confirmed' && (
-        <p className="mt-2 text-sm text-neutral-400">
-          Place this order on AliExpress using the links below. Automatic ordering is paused for now.
-        </p>
-      )}
+      {review.status === 'confirmed' && <SupplierPanel order={order} onUpdate={onUpdate} />}
       {review.status === 'cancelled' && (
         <p className="mt-2 text-sm text-red-300">Refund the customer in LipaPay or Absa if you haven’t already.</p>
       )}

@@ -435,6 +435,8 @@ export class AliExpressDS {
       freeShipping: Boolean(free),
       shippingCostUSD,
       company: chosen?.company || null,
+      // The delivery service's code, needed when placing the supplier order.
+      serviceCode: chosen?.code || null,
       minDays: chosen?.min_delivery_days ?? null,
       maxDays: chosen?.max_delivery_days ?? null,
       deliveryDesc: chosen?.delivery_date_desc || null,
@@ -637,6 +639,9 @@ function normalizeDetail(r = {}, productId) {
     priceUSD: parseFloat(s.offer_sale_price ?? s.sku_price ?? 0) || 0,
     stock: s.sku_available_stock ?? null,
     image: skuImage(s),
+    // The option's attribute string (e.g. "14:200006156#Red"), which is what
+    // placing a supplier order needs to name the exact variant.
+    skuAttr: s.sku_attr || null,
   }));
 
   const priced = variants.map((v) => v.priceUSD).filter((n) => n > 0);

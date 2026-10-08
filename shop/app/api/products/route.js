@@ -16,7 +16,7 @@ import { loadSettings, currentSettings } from '@/lib/settings';
 // The same searches repeat constantly (every category tile, every popular term),
 // and each uncached one costs a search plus a shipping quote per product. Serve
 // repeats from the CDN, and serve a stale copy instantly while refreshing it.
-const SEARCH_CACHE = 'public, s-maxage=600, stale-while-revalidate=3600';
+const SEARCH_CACHE = 'public, s-maxage=1800, stale-while-revalidate=86400';
 
 // Filtering removes results, so more are fetched than the caller asked for.
 const OVERFETCH = 1.6;

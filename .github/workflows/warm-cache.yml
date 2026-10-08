@@ -1,0 +1,26 @@
+name: Keep shop pages warm
+
+# Visits the home page and each category row's product list every 20 minutes,
+# one at a time, so shoppers are served a ready copy from Vercel's cache instead
+# of waiting while the shop asks the supplier (which also limits how fast we may
+# ask). Public URLs only; no secrets needed.
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Warm home, best picks and category rows
+        run: |
+          base=https://www.mrsqoopexpress.com
+          curl -s -o /dev/null -w "home %{http_code} %{time_total}s\n" "$base/" || true
+          curl -s -o /dev/null -w "best picks %{http_code} %{time_total}s\n" "$base/api/trending?page=1&limit=20" || true
+          for k in electronic%20gadgets laptop smartphone men%20trousers furniture%20chair beauty%20products \
+                   fitness%20equipment baby%20toys pet%20supplies car%20accessories hand%20tools travel%20bags office%20supplies; do
+            curl -s -m 90 -o /dev/null -w "$k %{http_code} %{time_total}s\n" "$base/api/products?keyword=$k&page=1&limit=10" || true
+            sleep 4
+          done

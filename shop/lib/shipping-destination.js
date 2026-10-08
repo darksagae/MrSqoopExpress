@@ -32,12 +32,16 @@ export const WAREHOUSE = {
   country: 'United Arab Emirates',
   province: 'Dubai',
   city: 'Dubai',
-  district: 'Deira',
-  addressLine: 'Deira, Dubai',
+  district: 'Al Zarooni',
+  addressLine: '12 B Street, AL ZAROONI 4 101',
+  zip: '00000',
+  contactName: 'Ronnie NTEGE',
+  phoneCountry: '+971',
+  phone: '588164478',
 };
 
 /** Operator-facing only — never render this to a customer. */
-export const WAREHOUSE_LABEL = 'Deira, Dubai — United Arab Emirates';
+export const WAREHOUSE_LABEL = '12 B Street, Al Zarooni, Dubai — United Arab Emirates';
 
 /**
  * Handling fee, charged as a percentage of the product price. The percentage is

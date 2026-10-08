@@ -3,6 +3,7 @@
 import crypto from 'crypto';
 import { getSql } from './db.js';
 import { syncOrderToTracking } from './tracking.js';
+import { sendOrderConfirmation, isEmailConfigured } from './email.js';
 
 /**
  * Order persistence.
@@ -181,6 +182,13 @@ export async function settlePayment(paymentRef, status, { failureReason } = {}) 
     if (paid) {
       const synced = await syncOrderToTracking(order);
       if (!synced) console.error('[settlePayment] tracking sync did not complete for', order.id);
+      // The buyer's confirmation email, sent exactly once with this transition.
+      // Best-effort: a mail hiccup must never undo a settled payment.
+      if (order.customer_email && isEmailConfigured()) {
+        await sendOrderConfirmation(order).catch((e) =>
+          console.error('[settlePayment] confirmation email failed for', order.id, e.message)
+        );
+      }
     }
     return { changed: true, order };
   }

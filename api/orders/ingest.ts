@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createOrder, type OrderItem, type PaymentMethod } from '../_lib/orders.js'
 import { getSql } from '../_lib/db.js'
+import { sendEmail } from '../_lib/email.js'
 
 const METHODS: readonly string[] = ['mtn', 'airtel', 'card']
 
@@ -93,9 +94,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: message })
     }
 
+    // Tell the operator a paid order is waiting. Best-effort: the order is saved
+    // whether or not the email goes out.
+    const to = process.env.ADMIN_CONTACT_EMAIL
+    if (to && process.env.RESEND_API_KEY) {
+      await sendEmail({ to, subject: `New paid order ${result.order.trackingId}`, html: adminOrderEmail(req.body ?? {}, result.order.trackingId) })
+        .catch((error) => console.error('Admin order email failed', error))
+    }
+
     return res.status(201).json({ ok: true, trackingId: result.order.trackingId })
   } catch (error) {
     console.error('Order ingest failed', error)
     return res.status(500).json({ error: 'Ingest failed.' })
   }
+}
+
+const esc = (v: unknown) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)
+const money = (n: unknown) => 'UGX ' + Math.round(Number(n) || 0).toLocaleString('en-US')
+const METHOD_LABEL: Record<string, string> = { mtn: 'MTN Mobile Money', airtel: 'Airtel Money', card: 'Bank card' }
+
+function adminOrderEmail(body: Record<string, unknown>, trackingId: string) {
+  const items = cleanItems(body.items)
+  const lines = items
+    .map((i) => `<li>${i.qty} × ${esc(i.name)} — ${money(i.unitUgx)} each${i.productId ? ` (product ${esc(i.productId)}${i.skuId ? `, option ${esc(i.skuId)}` : ''})` : ''}</li>`)
+    .join('')
+  const site = process.env.VITE_ADMIN_SITE_URL || 'https://control.mrsqoopexpress.com'
+  return `
+  <div style="font-family:Arial,sans-serif;max-width:560px;color:#111">
+    <h2 style="margin:0 0 8px">New paid order ${esc(trackingId)}</h2>
+    <p style="margin:0 0 12px;color:#555">Waiting for your confirmation in the admin.</p>
+    <p><strong>Customer:</strong> ${esc(body.customerName)} · ${esc(body.phone)}<br>
+       <strong>Paid:</strong> ${money(body.billingUgx)} by ${esc(METHOD_LABEL[String(body.paymentMethod)] ?? body.paymentMethod ?? 'mobile money')}
+       ${body.paymentRef ? `<br><strong>Payment ref:</strong> ${esc(body.paymentRef)}` : ''}
+       ${body.promoCode ? `<br><strong>Promo:</strong> ${esc(body.promoCode)} (−${money(body.discountUgx)})` : ''}</p>
+    <ul>${lines}</ul>
+    <p><a href="${esc(site)}" style="background:#E8B923;color:#000;padding:10px 18px;border-radius:999px;text-decoration:none;font-weight:bold">Open the admin</a></p>
+  </div>`
 }

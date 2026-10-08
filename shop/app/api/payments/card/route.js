@@ -48,7 +48,7 @@ export async function POST(request) {
   if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
   const { lines, total: amountUGX, promo } = priced;
 
-  const orderId = newOrderId();
+  const orderId = await newOrderId();
   const { endpoint, fields, transactionUuid } = buildPaymentRequest({ orderId, amountUGX });
 
   try {

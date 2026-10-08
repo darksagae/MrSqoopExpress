@@ -76,7 +76,7 @@ export async function POST(request) {
   if (priced.response) return NextResponse.json(priced.response.body, { status: priced.response.status });
   const { lines, total: amountUGX, promo } = priced;
 
-  const orderId = newOrderId();
+  const orderId = await newOrderId();
 
   // Record the order before any prompt reaches the customer's phone, so a
   // database fault can never leave someone paying for an order we don't have.

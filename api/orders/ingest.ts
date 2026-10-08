@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createOrder, type OrderItem, type PaymentMethod } from '../_lib/orders.js'
+import { getSql } from '../_lib/db.js'
 
 const METHODS: readonly string[] = ['mtn', 'airtel', 'card']
 
@@ -74,6 +75,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if ('error' in result) {
       const message = String(result.error ?? '')
       if (/already in use/i.test(message)) {
+        // A repeat of the same order (the status poll and the provider callback
+        // can both fire) is fine. A different customer's order that happens to
+        // carry an order number already used here (say, one typed in by hand)
+        // is not: reporting it as done would silently lose the order.
+        const sql = getSql()
+        const rows = (await sql`
+          SELECT phone FROM orders WHERE LOWER(tracking_id) = LOWER(${String(trackingId).trim()}) LIMIT 1
+        `) as { phone: string }[]
+        const last9 = (v: unknown) => String(v ?? '').replace(/\D/g, '').slice(-9)
+        if (rows.length && last9(rows[0].phone) !== last9(phone)) {
+          console.error('Ingest order number clash', trackingId)
+          return res.status(409).json({ error: 'That order number belongs to a different order.', code: 'ID_CONFLICT' })
+        }
         return res.status(200).json({ ok: true, trackingId, duplicate: true })
       }
       return res.status(400).json({ error: message })

@@ -73,9 +73,26 @@ export function ensureAccountColumns() {
   return accountColumns;
 }
 
-/** Time-ordered but collision-proof when two checkouts land in the same ms. */
-export function newOrderId() {
-  return 'MSE-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
+/**
+ * Order numbers run MSE-001, MSE-002 ... in the order orders are started, from a
+ * database sequence so two checkouts at the same instant can never share one.
+ * A number is used up even if that checkout is abandoned, so the series can have
+ * gaps but never repeats. (The number doubles as the payment reference, so it
+ * must be unique for good.)
+ *
+ * If the sequence cannot be reached, fall back to a random id rather than stop
+ * someone paying: an odd-looking number is better than a lost sale.
+ */
+export async function newOrderId() {
+  try {
+    const sql = getSql();
+    await sql`CREATE SEQUENCE IF NOT EXISTS order_number_seq START 1`;
+    const [{ n }] = await sql`SELECT nextval('order_number_seq') AS n`;
+    return 'MSE-' + String(n).padStart(3, '0');
+  } catch (e) {
+    console.error('[orders] sequence unavailable, using a random order id:', e.message);
+    return 'MSE-' + Date.now().toString(36).toUpperCase() + crypto.randomBytes(4).toString('hex').toUpperCase();
+  }
 }
 
 export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef, userId, customerEmail, promoCode, discountUGX }) {

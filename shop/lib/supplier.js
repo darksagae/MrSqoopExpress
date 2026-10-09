@@ -43,12 +43,26 @@ async function buildItem(line) {
   const variant = product.variants.find((v) => v.skuId === String(line.skuId)) || null;
   if (!variant) throw new Error(`"${line.name || productId}": the option bought is no longer available from the supplier.`);
 
-  const freight = await aliexpressDS.queryFreight({
+  // The warehouse's province and city must be included: for the UAE the
+  // supplier refuses to quote (DELIVERY_SERVICE_EXCEPTION) without them.
+  const ask = () => aliexpressDS.queryFreight({
     productId,
     skuId: variant.skuId,
     quantity: qty,
     country: WAREHOUSE.countryCode,
+    provinceCode: WAREHOUSE.province,
+    cityCode: WAREHOUSE.city,
   });
+  let freight;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      freight = await ask();
+      break;
+    } catch (e) {
+      if (e.code !== 'FREIGHT_TEMPORARY' || attempt >= 2) throw e;
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
   if (!freight.deliverable || !freight.serviceCode) {
     throw new Error(`"${line.name || productId}": the supplier will not ship this to the Dubai warehouse.`);
   }

@@ -372,6 +372,10 @@ export class AliExpressDS {
     country = CUSTOMER_DESTINATION.countryCode,
     currency = 'USD',
     locale = 'en_US',
+    // Some destinations (the UAE among them) answer DELIVERY_SERVICE_EXCEPTION
+    // unless the province and city are given as well.
+    provinceCode,
+    cityCode,
   }) {
     const req = {
       quantity,
@@ -382,6 +386,8 @@ export class AliExpressDS {
       currency,
       locale,
     };
+    if (provinceCode) req.provinceCode = provinceCode;
+    if (cityCode) req.cityCode = cityCode;
     const resp = await this.call('aliexpress.ds.freight.query', {
       locale,
       queryDeliveryReq: JSON.stringify(req),

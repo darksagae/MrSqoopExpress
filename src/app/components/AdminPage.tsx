@@ -36,7 +36,7 @@ import { TRACKING_STAGES, type Order, type ReviewAction } from '../types/order'
 const GOLD = '#E8B923'
 
 const FILTER_LABELS: Record<OrderFilter, string> = {
-  awaiting: 'Awaiting Confirmation',
+  awaiting: 'Awaiting Action',
   all: 'All Orders',
   inTransit: 'In Transit',
   atCustoms: 'At Customs',
@@ -700,7 +700,7 @@ export function AdminPage() {
         <section className="mt-8">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             <StatCard
-              label="Awaiting Confirmation"
+              label="Awaiting Action"
               value={stats.awaiting}
               active={activeFilter === 'awaiting'}
               onClick={() => toggleFilter('awaiting')}

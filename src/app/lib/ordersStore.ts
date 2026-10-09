@@ -8,9 +8,13 @@ const DELIVERED_STAGE = TRACKING_STAGES.length - 1
 
 export function orderMatchesFilter(order: Order, filter: OrderFilter) {
   if (filter === 'all') return true
-  // Paid and waiting on the operator: not yet bought from the supplier.
+  // Paid and still needing the operator: not yet confirmed, or confirmed but not
+  // yet placed with the supplier. A confirmed order stays here (with its
+  // "Place order on AliExpress" button) until it is placed.
   if (filter === 'awaiting') {
-    return order.review?.status === 'pending' || order.review?.status === 'on_hold'
+    const status = order.review?.status
+    if (status === 'pending' || status === 'on_hold') return true
+    return status === 'confirmed' && order.supplier?.status !== 'placed'
   }
   if (filter === 'inTransit') {
     return order.currentStageIndex > 0 && order.currentStageIndex < 5

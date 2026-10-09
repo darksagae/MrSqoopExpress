@@ -14,5 +14,10 @@
     "api/orders/item.ts": {
       "maxDuration": 60
     }
+  },
+  "git": {
+    "deploymentEnabled": {
+      "claude/*": false
+    }
   }
 }

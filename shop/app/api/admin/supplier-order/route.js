@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { isSettingsAdmin } from '@/lib/settings';
-import { placeSupplierOrder } from '@/lib/supplier';
+import { isSettingsAdmin, loadSettings } from '@/lib/settings';
+import { placeSupplierOrder, previewSupplierOrder } from '@/lib/supplier';
 
 /**
  * POST /api/admin/supplier-order  { orderId }
@@ -21,11 +21,16 @@ export async function POST(request) {
   if (!orderId) return NextResponse.json({ error: 'Missing order id.' }, { status: 400 });
 
   try {
+    await loadSettings(); // the exchange rate used for the UGX figures
+    if (body?.preview === true) {
+      const q = await previewSupplierOrder(orderId);
+      return NextResponse.json(q, { status: q.ok ? 200 : 404 });
+    }
     const r = await placeSupplierOrder(orderId);
     const status = r.ok ? 200 : r.code === 'NOT_FOUND' ? 404 : r.code === 'IN_PROGRESS' || r.code === 'NOT_PAID' ? 409 : 502;
     return NextResponse.json(r, { status });
   } catch (e) {
     console.error('[supplier-order] failed', orderId, e.message);
-    return NextResponse.json({ ok: false, error: 'Could not place the order right now.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e.message || 'Could not place the order right now.' }, { status: 502 });
   }
 }

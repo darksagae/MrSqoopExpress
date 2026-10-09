@@ -67,6 +67,8 @@ export interface OrderSupplier {
   status: 'placing' | 'placed' | 'failed'
   orderIds: string[]
   error: string | null
+  /** What the supplier charged to ship to the Dubai warehouse, in US$. */
+  dubaiShipUsd: number | null
 }
 
 /** A promo code the customer used; the discount came off the product prices. */
@@ -108,6 +110,7 @@ type OrderRow = {
   supplier_status?: string | null
   supplier_order_ids?: string | null
   supplier_error?: string | null
+  supplier_ship_usd?: number | string | null
 }
 
 const PAYMENT_METHODS: readonly string[] = ['mtn', 'airtel', 'card']
@@ -136,7 +139,8 @@ function ensureOrderColumns(): Promise<boolean> {
             ADD COLUMN IF NOT EXISTS discount_ugx BIGINT,
             ADD COLUMN IF NOT EXISTS supplier_status TEXT,
             ADD COLUMN IF NOT EXISTS supplier_order_ids TEXT,
-            ADD COLUMN IF NOT EXISTS supplier_error TEXT
+            ADD COLUMN IF NOT EXISTS supplier_error TEXT,
+            ADD COLUMN IF NOT EXISTS supplier_ship_usd NUMERIC
         `
         return true
       } catch (error) {
@@ -216,6 +220,7 @@ function rowToAdminOrder(row: OrderRow): AdminOrder {
             status: row.supplier_status,
             orderIds: row.supplier_order_ids ? row.supplier_order_ids.split(',').filter(Boolean) : [],
             error: row.supplier_error ?? null,
+            dubaiShipUsd: row.supplier_ship_usd == null ? null : Number(row.supplier_ship_usd),
           }
         : null,
   }
@@ -429,13 +434,17 @@ export async function getAdminOrder(id: string) {
 }
 
 /** Record what the shop reported back after placing (or failing to place) the supplier order. */
-export async function setSupplierResult(id: string, supplier: { status: string; orderIds: string[]; error: string | null }) {
+export async function setSupplierResult(
+  id: string,
+  supplier: { status: string; orderIds: string[]; error: string | null; dubaiShipUSD?: number | null },
+) {
   await ensureOrderColumns()
   const rows = await getSql()`
     UPDATE orders
        SET supplier_status = ${supplier.status},
            supplier_order_ids = ${supplier.orderIds.join(',') || null},
-           supplier_error = ${supplier.error}
+           supplier_error = ${supplier.error},
+           supplier_ship_usd = ${supplier.dubaiShipUSD ?? null}
      WHERE id = ${id}
     RETURNING *
   `

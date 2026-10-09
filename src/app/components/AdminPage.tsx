@@ -11,6 +11,7 @@ import {
   fetchAllOrders,
   migrateDatabase,
   placeSupplierOrder,
+  quoteSupplierOrder,
   reviewOrder,
   updateOrderBilling,
 } from '../lib/ordersApi'
@@ -200,9 +201,20 @@ function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Prom
   const supplier = order.supplier
 
   const place = async () => {
-    if (!confirm('Place this order on AliExpress now, shipped to the Dubai warehouse? You will then pay it in the AliExpress account.')) return
     setBusy(true)
     try {
+      // Show what AliExpress charges to ship to Dubai next to what the customer
+      // paid for shipping to Uganda, before anything is ordered.
+      const q = await quoteSupplierOrder(order.id)
+      const lines = q.lines.map((l) => `• ${l.qty} × ${l.name.slice(0, 40)}: ${l.shipUSD ? `US$${l.shipUSD.toFixed(2)}` : 'free'} (${l.service})`).join('\n')
+      const ok = confirm(
+        `Shipping to the Dubai warehouse:\n${lines}\n` +
+          `Total to Dubai: US$${q.dubaiShipUSD.toFixed(2)} (${formatUgx(q.dubaiShipUGX)})\n\n` +
+          `Customer paid: shipping to Uganda ${formatUgx(q.paidShipUGX)} + handling ${formatUgx(q.paidHandlingUGX)}\n` +
+          `Left for Dubai → Uganda: ${formatUgx(q.leftForUgandaLegUGX)}\n\n` +
+          'Place this order on AliExpress now? You then pay it in the AliExpress account.',
+      )
+      if (!ok) return
       await placeSupplierOrder(order.id)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Could not place the order. Try again.')
@@ -219,6 +231,11 @@ function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Prom
           <span className="font-bold text-green-400">Placed on AliExpress</span> · order{' '}
           {supplier.orderIds.join(', ')}
         </p>
+        {supplier.dubaiShipUsd != null && (
+          <p className="mt-1 text-neutral-400">
+            Shipping to Dubai: {supplier.dubaiShipUsd ? `US$${supplier.dubaiShipUsd.toFixed(2)}` : 'free'}
+          </p>
+        )}
         <p className="mt-1 text-neutral-400">
           Now pay it in the AliExpress account:{' '}
           <a

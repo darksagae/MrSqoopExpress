@@ -33,17 +33,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const secret = process.env.ORDER_INGEST_SECRET
         if (!secret) return res.status(503).json({ error: 'Shop connection is not configured.' })
         const shop = (process.env.SHOP_API_URL || 'https://www.mrsqoopexpress.com').replace(/\/$/, '')
-        let data: { ok?: boolean; error?: string; supplier?: { status: string; orderIds: string[]; error: string | null } } = {}
+        const preview = req.body?.preview === true
+        let data: {
+          ok?: boolean
+          error?: string
+          supplier?: { status: string; orderIds: string[]; error: string | null; dubaiShipUSD?: number | null }
+          [key: string]: unknown
+        } = {}
         try {
           const upstream = await fetch(`${shop}/api/admin/supplier-order`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-ingest-secret': secret },
-            body: JSON.stringify({ orderId: current.trackingId }),
+            body: JSON.stringify({ orderId: current.trackingId, preview }),
             signal: AbortSignal.timeout(55_000),
           })
           data = (await upstream.json().catch(() => ({}))) as typeof data
         } catch {
           return res.status(502).json({ error: 'Could not reach the shop. Try again.' })
+        }
+        // A preview only quotes the Dubai shipping; nothing is ordered or stored.
+        if (preview) {
+          if (!data.ok) return res.status(502).json({ error: data.error || 'Could not get the Dubai shipping quote.' })
+          return res.status(200).json({ quote: data })
         }
         const order = data.supplier ? await setSupplierResult(id, data.supplier) : current
         if (!data.ok) {

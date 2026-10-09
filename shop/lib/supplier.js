@@ -2,6 +2,7 @@ import { aliexpressDS } from './aliexpress.js';
 import { getSql } from './db.js';
 import { ensureAccountColumns } from './orders.js';
 import { WAREHOUSE } from './shipping-destination.js';
+import { shipUGX } from './pricing.js';
 
 /**
  * Place a paid order with the supplier, shipped to our Dubai warehouse.
@@ -23,6 +24,7 @@ function ensureSupplierColumns() {
       await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS supplier_order_ids TEXT`;
       await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS supplier_error TEXT`;
       await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS supplier_at TIMESTAMPTZ`;
+      await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS supplier_ship_usd NUMERIC`;
     })().catch((e) => { columnsReady = null; throw e; });
   }
   return columnsReady;
@@ -33,6 +35,9 @@ const view = (row) => ({
   orderIds: row.supplier_order_ids ? row.supplier_order_ids.split(',') : [],
   error: row.supplier_error || null,
   at: row.supplier_at || null,
+  // What the supplier charges to ship to the Dubai warehouse (not what the
+  // customer paid, which was quoted to Uganda).
+  dubaiShipUSD: row.supplier_ship_usd == null ? null : Number(row.supplier_ship_usd),
 });
 
 /** Work out exactly what to order for one line: product, option and delivery service. */
@@ -72,7 +77,41 @@ async function buildItem(line) {
     logistics_service_name: freight.serviceCode,
   };
   if (variant.skuAttr) item.sku_attr = variant.skuAttr;
-  return item;
+  const shipUSD = freight.freeShipping ? 0 : Number(freight.shippingCostUSD) || 0;
+  return { item, shipUSD, service: freight.company || freight.serviceCode };
+}
+
+/**
+ * Money for one order, side by side: what the customer paid us for shipping to
+ * Uganda plus handling, against what the supplier charges to ship to Dubai.
+ * What is left is the budget for the Dubai -> Uganda leg.
+ */
+function moneyFor(order, dubaiShipUSD) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  const paidShipUGX = items.reduce((t, i) => t + (Number(i.qty) || 1) * (Number(i.shipUGX) || 0), 0);
+  const paidHandlingUGX = items.reduce((t, i) => t + (Number(i.qty) || 1) * (Number(i.handlingUGX) || 0), 0);
+  const dubaiShipUGX = shipUGX(dubaiShipUSD);
+  return {
+    dubaiShipUSD: Math.round(dubaiShipUSD * 100) / 100,
+    dubaiShipUGX,
+    paidShipUGX,
+    paidHandlingUGX,
+    leftForUgandaLegUGX: paidShipUGX + paidHandlingUGX - dubaiShipUGX,
+  };
+}
+
+/** Quote the supplier order to Dubai without placing it, so the operator sees the cost first. */
+export async function previewSupplierOrder(orderId) {
+  const [order] = await getSql()`SELECT * FROM orders WHERE id = ${orderId}`;
+  if (!order) return { ok: false, code: 'NOT_FOUND', error: 'Order not found in the shop.' };
+  const items = Array.isArray(order.items) ? order.items : [];
+  const lines = [];
+  for (const line of items) {
+    const built = await buildItem(line);
+    lines.push({ name: line.name, qty: Number(line.qty) || 1, shipUSD: built.shipUSD, service: built.service });
+  }
+  const total = lines.reduce((t, l) => t + l.shipUSD, 0);
+  return { ok: true, lines, ...moneyFor(order, total) };
 }
 
 export async function placeSupplierOrder(orderId) {
@@ -100,7 +139,12 @@ export async function placeSupplierOrder(orderId) {
     const items = Array.isArray(order.items) ? order.items : [];
     if (!items.length) throw new Error('The order has no items.');
     const productItems = [];
-    for (const line of items) productItems.push(await buildItem(line));
+    let dubaiShipUSD = 0;
+    for (const line of items) {
+      const built = await buildItem(line);
+      productItems.push(built.item);
+      dubaiShipUSD += built.shipUSD;
+    }
 
     const request = {
       out_order_id: order.id,
@@ -129,10 +173,11 @@ export async function placeSupplierOrder(orderId) {
 
     const [row] = await sql`
       UPDATE orders SET supplier_status = 'placed', supplier_order_ids = ${ids.join(',')},
-                        supplier_error = NULL, supplier_at = now()
+                        supplier_error = NULL, supplier_at = now(),
+                        supplier_ship_usd = ${Math.round(dubaiShipUSD * 100) / 100}
        WHERE id = ${order.id} RETURNING *
     `;
-    return { ok: true, code: 'PLACED', supplier: view(row) };
+    return { ok: true, code: 'PLACED', supplier: view(row), money: moneyFor(row, dubaiShipUSD) };
   } catch (e) {
     console.error('[supplier] placing order failed', order.id, e.message);
     const [row] = await sql`

@@ -63,7 +63,12 @@ export interface Order {
   items?: OrderItem[]
   review?: OrderReview | null
   promo?: { code: string; discountUgx: number } | null
-  supplier?: { status: 'placing' | 'placed' | 'failed'; orderIds: string[]; error: string | null } | null
+  supplier?: {
+    status: 'placing' | 'placed' | 'failed'
+    orderIds: string[]
+    error: string | null
+    dubaiShipUsd?: number | null
+  } | null
 }
 
 export interface TrackingStepView {

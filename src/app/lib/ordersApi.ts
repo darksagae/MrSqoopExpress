@@ -237,3 +237,22 @@ export async function placeSupplierOrder(id: string): Promise<Order> {
   const data = await parseJson<{ order: Order }>(response)
   return data.order
 }
+
+export interface SupplierQuote {
+  lines: { name: string; qty: number; shipUSD: number; service: string }[]
+  dubaiShipUSD: number
+  dubaiShipUGX: number
+  paidShipUGX: number
+  paidHandlingUGX: number
+  leftForUgandaLegUGX: number
+}
+
+/** The supplier's shipping cost to the Dubai warehouse for this order, without ordering anything. */
+export async function quoteSupplierOrder(id: string): Promise<SupplierQuote> {
+  const response = await fetch(`/api/orders/item?id=${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: authHeaders(),
+    body: JSON.stringify({ placeSupplier: true, preview: true }),
+  })
+  return (await parseJson<{ quote: SupplierQuote }>(response)).quote
+}

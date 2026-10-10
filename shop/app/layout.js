@@ -4,6 +4,7 @@ import AuthProvider from './components/AuthProvider';
 import SiteHeader from './components/SiteHeader';
 import SiteFooter from './components/SiteFooter';
 import CartDrawer from './components/CartDrawer';
+import Assistant from './components/assistant/Assistant';
 
 const SITE = 'https://www.mrsqoopexpress.com';
 
@@ -71,6 +72,7 @@ export default function RootLayout({ children }) {
             {children}
             <SiteFooter />
             <CartDrawer />
+            <Assistant />
           </CartProvider>
         </AuthProvider>
       </body>

@@ -18,12 +18,19 @@ const text = (t) => [{ type: 'text', text: t }];
 export function createAssistServer(base, { account = null } = {}) {
   const card = (p) => ({
     id: p.id,
+    // The variant the shipping was quoted for, so "Add to cart" prices like the product page.
+    skuId: p.skuId ?? p.shipping?.quotedForSkuId ?? null,
     title: shortTitle(p.title, 10),
     image: p.image || p.images?.[0],
     priceUGX: p.priceUGX,
     handlingUGX: p.handlingUGX,
-    shippingUGX: p.shipping?.costUGX ?? null,
+    shippingUGX: p.shipping?.known ? p.shipping.costUGX : null,
+    freeShipping: Boolean(p.shipping?.free),
     totalUGX: totalOf(p),
+    originalUGX: p.originalUGX ?? null,
+    discountPct: p.discountPct ?? null,
+    rating: p.rating ?? null,
+    sold: p.sold ?? null,
     delivery: deliveryPhrase(p.shipping),
     url: `${base}/product/${p.id}`,
   });

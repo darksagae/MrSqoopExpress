@@ -1,0 +1,144 @@
+/* ===== Sqoop Assist (shop assistant panel) ===== */
+.sa-launcher {
+  position: fixed; right: 20px; bottom: 20px; z-index: 75;
+  display: flex; align-items: center; gap: 10px;
+  background: #000; color: #fff; border: 1px solid #2a2a2a; border-radius: 999px;
+  padding: 6px 18px 6px 6px; cursor: pointer; font-family: inherit; font-size: 15px; font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0,0,0,.28); transition: transform .15s ease, box-shadow .15s ease;
+}
+.sa-launcher:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(0,0,0,.34); }
+.sa-launcher img { height: 40px; width: auto; border-radius: 999px; }
+
+.sa-panel {
+  position: fixed; right: 20px; bottom: 20px; z-index: 85;
+  width: 420px; height: min(700px, calc(100dvh - 40px));
+  display: flex; flex-direction: column;
+  background: #000; color: #fff; border: 1px solid #222; border-radius: 22px; overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.4);
+  animation: sa-in .18s ease-out;
+}
+.sa-backdrop { display: none; }
+.sa-grab { display: none; }
+@keyframes sa-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.sa-panel.sa-embedded {
+  position: relative; right: auto; bottom: auto; z-index: auto;
+  width: 100%; max-width: 820px; margin: 24px auto; height: calc(100dvh - 190px); min-height: 520px;
+  animation: none; box-shadow: 0 12px 40px rgba(0,0,0,.18);
+}
+
+.sa-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #1f1f1f; }
+.sa-logo { height: 38px; width: auto; border-radius: 8px; }
+.sa-title { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.sa-title b { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+.sa-title span { font-size: 12.5px; color: #9a9a9a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sa-icon {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  background: #141414; color: #bdbdbd; border: 1px solid #262626; border-radius: 50%; cursor: pointer;
+}
+.sa-icon:hover, .sa-icon.on { color: #fff; border-color: #444; }
+
+.sa-log { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 14px 8px; display: flex; flex-direction: column; gap: 12px; overscroll-behavior: contain; }
+.sa-row { display: flex; flex-direction: column; gap: 8px; }
+.sa-row.user { align-items: flex-end; }
+.sa-bubble { max-width: 86%; padding: 10px 14px; border-radius: 18px; font-size: 15px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sa-bubble.assistant { background: #171717; border: 1px solid #242424; border-bottom-left-radius: 6px; }
+.sa-bubble.user { background: #fff; color: #000; border-bottom-right-radius: 6px; }
+
+.sa-typing { display: inline-flex; gap: 5px; padding: 14px 16px; }
+.sa-typing i { width: 7px; height: 7px; border-radius: 50%; background: #8a8a8a; animation: sa-dot 1s infinite ease-in-out; }
+.sa-typing i:nth-child(2) { animation-delay: .15s; }
+.sa-typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes sa-dot { 0%, 80%, 100% { opacity: .3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+/* Product results: a swipeable row of white cards, like a shop's own listings. */
+.sa-carousel {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 172px; gap: 10px;
+  overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 8px; margin: 0 -14px; padding-left: 14px; padding-right: 14px;
+  scrollbar-width: thin; scrollbar-color: #333 transparent;
+}
+.sa-card { scroll-snap-align: start; background: #fff; color: #111; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; }
+.sa-card-img { position: relative; display: block; aspect-ratio: 1; background: #f4f4f4; }
+.sa-card-img img { width: 100%; height: 100%; object-fit: cover; }
+.sa-badge { position: absolute; top: 8px; left: 8px; background: #000; color: #fff; font-size: 11.5px; font-weight: 700; padding: 3px 7px; border-radius: 999px; }
+.sa-card-body { padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.sa-card-title { font-size: 13.5px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 35px; }
+.sa-meta { display: flex; gap: 8px; font-size: 12px; color: #666; }
+.sa-stars { color: #111; font-weight: 600; }
+.sa-price { font-size: 15.5px; font-weight: 700; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.sa-price s { font-size: 12px; font-weight: 400; color: #999; }
+.sa-ship { font-size: 11.5px; color: #3a7d3a; }
+.sa-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; }
+.sa-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center;
+  background: #000; color: #fff; border: 1px solid #000; border-radius: 999px;
+  padding: 8px 10px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.sa-btn.ghost { background: #fff; color: #000; border-color: #d6d6d6; }
+.sa-cartbtn {
+  width: 36px; height: 36px; flex: none; display: grid; place-items: center; cursor: pointer;
+  background: #fff; color: #000; border: 1px solid #d6d6d6; border-radius: 50%;
+}
+.sa-cartbtn.on { background: #e9f6e9; border-color: #9fd39f; color: #1f7a1f; }
+.sa-btn:disabled { opacity: .5; cursor: default; }
+
+/* Order summary, payment and order-list sheets */
+.sa-sheet { background: #fff; color: #111; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; max-width: 100%; }
+.sa-sheet-title { font-size: 13px; text-transform: uppercase; letter-spacing: .6px; color: #777; }
+.sa-line { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 10px; font-size: 14px; }
+.sa-line img, .sa-line-ph { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: #f2f2f2; }
+.sa-line-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-total { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid #eee; padding-top: 8px; font-size: 14px; }
+.sa-total b { font-size: 16px; }
+.sa-pay { font-size: 13px; color: #555; }
+.sa-sheet .sa-actions { padding-top: 2px; }
+.sa-sheet .sa-btn { padding: 10px; font-size: 14px; }
+.sa-placed { flex-direction: row; align-items: center; gap: 12px; }
+.sa-placed p { font-size: 13.5px; color: #444; margin-top: 2px; }
+.sa-phone { font-size: 28px; }
+.sa-order { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+.sa-order div { display: flex; flex-direction: column; min-width: 0; }
+.sa-order span { color: #666; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-order em { font-style: normal; font-size: 12px; font-weight: 600; background: #f2f2f2; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.sa-link { font-size: 13.5px; font-weight: 600; text-decoration: underline; }
+.sa-signin { flex: none; align-self: flex-start; background: #fff; color: #000; border-color: #fff; padding: 9px 18px; }
+
+.sa-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sa-chip {
+  background: transparent; color: #fff; border: 1px solid #3a3a3a; border-radius: 999px;
+  padding: 7px 13px; font-size: 13.5px; font-family: inherit; cursor: pointer;
+}
+.sa-chip:hover { border-color: #fff; }
+
+.sa-composer { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; border-top: 1px solid #1f1f1f; }
+.sa-composer input {
+  flex: 1; min-width: 0; background: #121212; color: #fff; border: 1px solid #2c2c2c; border-radius: 999px;
+  padding: 12px 16px; font-size: 16px; font-family: inherit; outline: none;
+}
+.sa-composer input:focus { border-color: #555; }
+.sa-composer input::placeholder { color: #777; }
+.sa-mic, .sa-send {
+  width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; cursor: pointer; border: 1px solid #2c2c2c;
+}
+.sa-mic { background: #121212; color: #fff; }
+.sa-mic.on { background: #fff; color: #000; animation: sa-pulse 1.2s infinite; }
+@keyframes sa-pulse { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.45); } 70% { box-shadow: 0 0 0 12px rgba(255,255,255,0); } 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0); } }
+.sa-send { background: #fff; color: #000; border-color: #fff; }
+.sa-send:disabled { background: #2a2a2a; color: #777; border-color: #2a2a2a; cursor: default; }
+.sa-foot { font-size: 11.5px; color: #6f6f6f; text-align: center; padding: 0 12px 10px; }
+
+@media (max-width: 640px) {
+  .sa-launcher { right: 16px; bottom: 16px; padding: 5px; }
+  .sa-launcher span { display: none; }
+  .sa-launcher img { height: 38px; }
+  /* A pull-up widget over the shop: the page stays visible above it, and a tap
+     outside (or the close button) puts it away. */
+  .sa-backdrop { display: block; position: fixed; inset: 0; z-index: 84; background: rgba(0,0,0,.45); animation: sa-fade .18s ease-out; }
+  .sa-panel { left: 0; right: 0; bottom: 0; width: 100%; height: min(86dvh, 760px); border-radius: 22px 22px 0 0; border: none; animation: sa-up .22s ease-out; }
+  .sa-grab { display: block; width: 40px; height: 4px; border-radius: 4px; background: #3a3a3a; margin: 8px auto 0; flex: none; }
+  .sa-head { padding-top: 8px; }
+  .sa-panel.sa-embedded { margin: 0; height: calc(100dvh - 120px); min-height: 460px; border-radius: 0; }
+  .sa-carousel { grid-auto-columns: 160px; }
+  .sa-composer { padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+}
+@keyframes sa-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sa-fade { from { opacity: 0; } to { opacity: 1; } }

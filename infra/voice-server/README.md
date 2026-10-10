@@ -1,16 +1,22 @@
-# Voice server (Sqoop Assist's Kokoro voice)
+# Voice server (Sqoop Assist's spoken answers)
 
-The /assist page speaks answers with Kokoro-82M, a free open-source voice. On
-Vercel every cold start downloaded and loaded the 326 MB model, and the shared
-CPU generated speech slower than it plays (7–14 s per sentence). This server
-keeps the model loaded, so a sentence is ready in about 1–3 s on 2 cores.
+The /assist page speaks answers sentence by sentence through the shop's
+`/api/assist/tts`. That route keeps the same-site check and per-visitor rate
+limit and forwards each sentence here (`POST /tts`, bearer secret, pinned
+self-signed TLS on port 8443). If this server is down, the page falls back to
+the device's own voice.
 
-The shop's `/api/assist/tts` keeps the same-site check and per-visitor rate
-limit and forwards each sentence here (`POST /tts`, bearer secret). TLS uses a
-self-signed certificate the shop pins, so no domain name is needed. If the
-server is down, the page falls back to the device's own voice.
+It runs [Piper](https://github.com/rhasspy/piper) (MIT) with the `en_US-lessac-high`
+voice on the same $3.50 Vultr server as the payment egress proxy. On its one
+core Piper makes speech about 4x faster than it plays (~0.5 s for a short
+sentence) in ~210 MB. The Kokoro voice it replaces ran on Vercel and took
+7-14 s per sentence; Kokoro also needs 300-700 MB and is slower than real time
+on one core, so it can't share this server.
 
-## Create the server
+systemd gives the voice low CPU priority and caps it at 300 MB, so payments
+always come first.
+
+## Install (on the egress server)
 
 1. Generate secrets somewhere outside the repo:
    ```
@@ -18,19 +24,15 @@ server is down, the page falls back to the device's own voice.
      -subj "/CN=mse-voice" -keyout voice.key -out voice.crt
    openssl rand -hex 24 > secret
    ```
-2. `node render-cloud-init.mjs <that-dir> > user-data.yaml`
-3. Create a Vultr instance (Ubuntu 24.04, 2 vCPU / 2 GB, e.g. `vhp-2c-2gb-amd`,
-   region `ewr` next to Vercel's `iad1`) with that file as user-data. It
-   configures itself on first boot (about 5 minutes) and only opens port 443.
-4. Check `https://<ip>/health` answers `ok` (self-signed cert, so `curl -k`).
+2. Render the server's user-data with both secret dirs:
+   `node ../egress-proxy/render-cloud-init.mjs <egress-secrets> <voice-secrets> > user-data.yaml`
+3. Set it as the instance's user-data and reinstall the instance through the
+   Vultr API. The IP stays the same, so LipaPay's whitelist is unaffected. The
+   proxy is back within a few minutes; the voice follows once Piper and the
+   voice model (~140 MB) are downloaded.
 
 ## Connect the shop (Vercel project "shop")
 
-- `VOICE_SERVER_URL` = `https://<ip>`
+- `VOICE_SERVER_URL` = `https://<ip>:8443`
 - `VOICE_SERVER_SECRET` = contents of `secret`
 - `VOICE_SERVER_CA` = contents of `voice.crt`
-
-## Change the server
-
-There is no SSH. To ship a new `server.mjs`, render new user-data and reinstall
-the instance with it through the Vultr API (the IP stays the same).

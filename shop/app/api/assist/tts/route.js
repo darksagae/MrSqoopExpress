@@ -5,12 +5,13 @@ import { Agent, fetch as undiciFetch } from 'undici';
  *
  * Speaks one sentence of a Sqoop Assist answer for the /assist demo page. The
  * page sends an answer sentence by sentence so speech starts quickly. The
- * Kokoro voice runs on our voice server (infra/voice-server), where the model
- * stays loaded; this route only checks the request and passes it on. If the
- * voice server is unreachable the page falls back to the device's own voice.
+ * voice (Piper) runs on our voice server (infra/voice-server, on the same
+ * Vultr server as the payment proxy); this route only checks the request and
+ * passes it on. If the voice server is unreachable the page falls back to the
+ * device's own voice.
  *
  * Env:
- *   VOICE_SERVER_URL     https://<server-ip>
+ *   VOICE_SERVER_URL     https://<server-ip>:8443
  *   VOICE_SERVER_SECRET  shared secret the voice server expects
  *   VOICE_SERVER_CA      the voice server's self-signed certificate (PEM; \n escapes ok)
  */

@@ -148,7 +148,7 @@ function showCall(tool, args) {
   document.getElementById('lastcall').textContent = 'MCP tools/call → ' + tool;
   calls.insertAdjacentHTML('afterbegin', \`<div class="call"><b>tools/call</b> \${tool}\\n\${JSON.stringify(args, null, 2)}</div>\`);
 }
-// Best voice first: Kokoro through /api/assist/tts, else the nicest voice the device has.
+// Best voice first: Piper through /api/assist/tts, else the nicest voice the device has.
 const player = new Audio();
 let ttsOff = false, unlocked = false;
 function unlockAudio() {
@@ -180,7 +180,7 @@ function speakWithDevice(text) {
     speechSynthesis.speak(u);
   });
 }
-// Kokoro (free, open-source) on our voice server, one sentence at a time so
+// Piper (free, open-source) on our voice server, one sentence at a time so
 // speech starts quickly. Falls back to the device voice if the server is slow or busy.
 const FIRST_SENTENCE_WAIT_MS = 6000;
 function sentences(text) {

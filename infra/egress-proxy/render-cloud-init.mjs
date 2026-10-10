@@ -3,19 +3,22 @@
  * Build the cloud-init user-data that turns a fresh Debian 12 (or Ubuntu) server into
  * the egress proxy on first boot, with no one having to log in to it.
  *
- *   node render-cloud-init.mjs <secrets-dir> > user-data.yaml
+ *   node render-cloud-init.mjs <secrets-dir> [<voice-secrets-dir>] > user-data.yaml
  *
  * <secrets-dir> must hold proxy.crt, proxy.key and password (see README.md).
- * The output contains the private key and password: keep it out of the repo.
+ * With <voice-secrets-dir> the same server also runs the Sqoop Assist voice
+ * server (infra/voice-server). The output contains private keys and passwords:
+ * keep it out of the repo.
  */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { voiceCloudInit } from '../voice-server/cloud-init.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dir = process.argv[2];
 if (!dir) {
-  console.error('usage: node render-cloud-init.mjs <secrets-dir>');
+  console.error('usage: node render-cloud-init.mjs <secrets-dir> [<voice-secrets-dir>]');
   process.exit(1);
 }
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8');
@@ -24,6 +27,7 @@ const indent = (s) => s.trimEnd().split('\n').map((l) => '      ' + l).join('\n'
 const password = read('password').trim();
 if (!/^[A-Za-z0-9]{24,}$/.test(password)) throw new Error('password must be 24+ letters/digits');
 const allow = process.env.PROXY_ALLOW || 'pay.lipapayug.com';
+const voice = process.argv[3] ? voiceCloudInit(process.argv[3]) : { packages: '', users: '', files: '', runcmd: '' };
 
 process.stdout.write(`#cloud-config
 package_update: true
@@ -31,11 +35,11 @@ package_upgrade: true
 packages:
   - nodejs
   - ufw
-  - unattended-upgrades
+  - unattended-upgrades${voice.packages}
 users:
   - name: egress
     system: true
-    shell: /usr/sbin/nologin
+    shell: /usr/sbin/nologin${voice.users}
 write_files:
   - path: /opt/egress/proxy.cjs
     permissions: '0644'
@@ -78,7 +82,7 @@ ${indent(read('proxy.key'))}
       RestartSec=2
 
       [Install]
-      WantedBy=multi-user.target
+      WantedBy=multi-user.target${voice.files}
 runcmd:
   - chown egress:egress /opt/egress/proxy.key
   - ufw default deny incoming
@@ -86,5 +90,5 @@ runcmd:
   - ufw allow 443/tcp
   - ufw --force enable
   - systemctl daemon-reload
-  - systemctl enable --now egress
+  - systemctl enable --now egress${voice.runcmd}
 `);

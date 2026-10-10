@@ -19,6 +19,9 @@ needs a password, and only connects to hosts on `PROXY_ALLOW`, port 443.
    that file as user-data. It configures itself on first boot.
 4. Check `https://<ip>/health` answers `ok` (self-signed cert, so `curl -k`).
 
+The same server also runs the Sqoop Assist voice: pass the voice secrets dir as a
+second argument to `render-cloud-init.mjs` (see `../voice-server/README.md`).
+
 ## Connect the shop (Vercel project "shop")
 
 - `EGRESS_PROXY_URL` = `https://<ip>`

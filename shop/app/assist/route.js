@@ -148,13 +148,77 @@ function showCall(tool, args) {
   document.getElementById('lastcall').textContent = 'MCP tools/call → ' + tool;
   calls.insertAdjacentHTML('afterbegin', \`<div class="call"><b>tools/call</b> \${tool}\\n\${JSON.stringify(args, null, 2)}</div>\`);
 }
-function speak(text) {
+// Best voice first: ElevenLabs through /api/assist/tts, else the nicest voice the device has.
+const player = new Audio();
+let ttsOff = false, unlocked = false;
+function unlockAudio() {
+  // iOS only lets audio play after a tap, so prime the player on the first one.
+  if (unlocked) return; unlocked = true;
+  player.src = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABgAAAykAWlpaWlpaWlpaWlpaWlpaWnt7e3t7e3t7e3t7e3t7e3t7nJycnJycnJycnJycnJycnL29vb29vb29vb29vb29vb293t7e3t7e3t7e3t7e3t7e3t7/////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCowAAAAAAAAMpso+sIAAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NAxKQAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/80LEowAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';
+  player.play().then(() => player.pause()).catch(() => {});
+}
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
+function bestDeviceVoice() {
+  const voices = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+  const prefer = ['natural', 'neural', 'premium', 'enhanced', 'google us english', 'samantha', 'ava', 'jenny', 'aria', 'zira'];
+  for (const word of prefer) {
+    const v = voices.find(x => x.name.toLowerCase().includes(word));
+    if (v) return v;
+  }
+  return voices.find(v => v.lang === 'en-US') || voices[0];
+}
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
+
+function speakWithDevice(text) {
   return new Promise(resolve => {
-    if (!('speechSynthesis' in window) || window.SILENT) return resolve();
-    const u = new SpeechSynthesisUtterance(text.replace(/M S E/g, 'M S E'));
-    u.rate = 1.02; u.onend = u.onerror = resolve;
-    orb.className = 'orb speaking'; speechSynthesis.speak(u);
-  }).finally(() => orb.className = 'orb');
+    if (!('speechSynthesis' in window)) return resolve();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = bestDeviceVoice(); if (v) u.voice = v;
+    u.rate = 1.0; u.onend = u.onerror = resolve;
+    speechSynthesis.speak(u);
+  });
+}
+// Kokoro (free, open-source) on this server, one sentence at a time so speech
+// starts quickly. Falls back to the device voice if the server is slow or busy.
+const FIRST_SENTENCE_WAIT_MS = 12000;
+function sentences(text) {
+  return text.split(/(?<=[.!?])\\s+/).map(s => s.trim()).filter(Boolean)
+    .flatMap(s => s.length <= 280 ? [s] : s.match(/.{1,280}(\\s|$)/g).map(x => x.trim()));
+}
+function fetchVoice(sentence) {
+  return fetch('/api/assist/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: sentence }) })
+    .then(r => r.ok ? r.blob() : null).catch(() => null);
+}
+function playBlob(blob) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob);
+    player.src = url;
+    player.onended = player.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    player.play().catch(() => { URL.revokeObjectURL(url); resolve(); });
+  });
+}
+async function speakWithServerVoice(text) {
+  if (ttsOff) return false;
+  const parts = sentences(text);
+  if (!parts.length) return true;
+  let next = fetchVoice(parts[0]);
+  const first = await Promise.race([next, new Promise(r => setTimeout(() => r('slow'), FIRST_SENTENCE_WAIT_MS))]);
+  if (!first || first === 'slow') return false;
+  for (let i = 0; i < parts.length; i++) {
+    const blob = i === 0 ? first : await next;
+    if (i + 1 < parts.length) next = fetchVoice(parts[i + 1]);
+    if (!blob) { await speakWithDevice(parts.slice(i).join(' ')); return true; }
+    await playBlob(blob);
+  }
+  return true;
+}
+async function speak(text) {
+  if (window.SILENT) return;
+  orb.className = 'orb speaking';
+  try { if (!(await speakWithServerVoice(text))) await speakWithDevice(text); }
+  finally { orb.className = 'orb'; }
 }
 async function ask(text) {
   add('you', text); orb.className = 'orb thinking';

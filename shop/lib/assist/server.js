@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { myOrders, paymentStatus, placeOrder, prepareOrder } from './account';
 import { getProduct, getTrending, searchProducts, trackOrder } from './store';
 import { deliveryPhrase, shillings, shortTitle, totalOf } from './voice';
 
@@ -11,8 +12,10 @@ const text = (t) => [{ type: 'text', text: t }];
 /**
  * Sqoop Assist: the MCP server Alexa+ connects to.
  * `base` is the shop's own origin, e.g. https://www.mrsqoopexpress.com.
+ * `account` is the signed-in customer the assistant acts for, or null; the
+ * account tools (orders, ordering, payments) only ever touch that account.
  */
-export function createAssistServer(base) {
+export function createAssistServer(base, { account = null } = {}) {
   const card = (p) => ({
     id: p.id,
     title: shortTitle(p.title, 10),
@@ -123,6 +126,63 @@ export function createAssistServer(base) {
         structuredContent: { products: products.map(card) },
       };
     }
+  );
+
+  // What the account tools return, as an MCP result.
+  const reply = ({ speech, data }) => ({ content: text(speech), ...(data ? { structuredContent: data } : {}) });
+
+  server.registerTool(
+    'my_orders',
+    {
+      title: 'My orders',
+      description: "The signed-in customer's latest orders and where each one is. Needs the customer to be signed in.",
+      inputSchema: {},
+    },
+    async () => reply(await myOrders(account))
+  );
+
+  server.registerTool(
+    'prepare_order',
+    {
+      title: 'Prepare an order',
+      description:
+        'Price an order for the signed-in customer and read it back for them to confirm. Nothing is charged. ' +
+        'Returns a confirmation to pass to place_order once the customer clearly says yes. ' +
+        'Uses the Mobile Money number from their last order unless they give one.',
+      inputSchema: {
+        items: z
+          .array(z.object({ product_id: z.string().min(1), quantity: z.number().int().min(1).max(50).optional() }))
+          .min(1)
+          .max(10)
+          .describe('Products to order, with quantity (default 1)'),
+        phone: z.string().min(9).optional().describe('MTN or Airtel Uganda number to send the payment request to'),
+        promo_code: z.string().optional().describe('Promo code, if the customer gave one'),
+      },
+    },
+    async (args) => reply(await prepareOrder(account, args))
+  );
+
+  server.registerTool(
+    'place_order',
+    {
+      title: 'Place the order',
+      description:
+        'Place the order prepare_order read back and send the Mobile Money payment request to the customer\'s phone. ' +
+        'Only call this after the customer has clearly said yes to that exact order. ' +
+        'The customer approves the charge with their own PIN on their phone.',
+      inputSchema: { confirmation: z.string().min(10).describe('The confirmation prepare_order returned') },
+    },
+    async (args) => reply(await placeOrder(account, args))
+  );
+
+  server.registerTool(
+    'payment_status',
+    {
+      title: 'Payment status',
+      description: "Whether the payment for one of the signed-in customer's orders went through.",
+      inputSchema: { order_id: z.string().min(3).describe('Order number, e.g. MSE-012') },
+    },
+    async (args) => reply(await paymentStatus(account, args))
   );
 
   return server;

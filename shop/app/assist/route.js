@@ -18,6 +18,10 @@ const PAGE = `<!doctype html>
   header { display:flex; align-items:center; justify-content:space-between; padding:18px 28px; border-bottom:1px solid var(--line); }
   header b { font-size:20px; letter-spacing:.2px; }
   header span { color:var(--muted); font-size:14px; }
+  #acct { color:var(--cyan); font-size:14px; text-decoration:none; white-space:nowrap; }
+  .order { align-self:stretch; background:#0c1426; border:1px solid var(--line); border-radius:14px; padding:12px 16px; font-size:15px; }
+  .order div { display:flex; justify-content:space-between; gap:12px; padding:4px 0; }
+  .order .tot { border-top:1px solid var(--line); margin-top:6px; padding-top:8px; color:var(--cyan); font-weight:700; }
   main { flex:1; min-height:0; width:100%; display:grid; grid-template-columns: 1fr 360px; gap:24px; padding:20px 28px; max-width:1400px; margin:0 auto; }
   main { grid-template-columns: minmax(0,1fr) 360px; }
   #lastcall { display:none; text-align:center; font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--cyan); margin:-6px 0 10px; }
@@ -55,7 +59,7 @@ const PAGE = `<!doctype html>
 </style>
 </head>
 <body>
-<header><b>Sqoop Assist</b><span>Alexa+ experience for Mr Sqoop Express · powered by MCP</span></header>
+<header><b>Sqoop Assist</b><span>Alexa+ experience for Mr Sqoop Express · powered by MCP</span><a id="acct" href="/login?next=/assist">Sign in to order</a></header>
 <main>
   <section class="stage">
     <div class="orb-wrap"><div class="orb" id="orb"></div></div>
@@ -70,12 +74,22 @@ const PAGE = `<!doctype html>
   <aside>
     <h3>How it works</h3>
     <p class="flow">You speak → Alexa+ → <code>Sqoop Assist MCP server</code> at <code>/api/mcp</code> (Streamable HTTP) → live Mr Sqoop Express store data → spoken answer. This page simulates Alexa+ in your browser.</p>
+    <h3>Try saying</h3>
+    <p class="flow">"Find wireless earbuds under 150,000" → "Order the first one" → "Yes" → approve with your PIN → "Did my payment go through?" · "My orders"</p>
     <h3>MCP tool calls</h3>
     <div id="calls"><div class="call" style="color:var(--muted)">Waiting for your first question…</div></div>
   </aside>
 </main>
 <script>
-const sessionMem = { lastProducts: [], pendingOrder: null };
+const sessionMem = { lastProducts: [], lastProduct: null, pendingOrder: null, pending: null, awaitingPhone: null, lastOrderId: null };
+// Who is signed in: the assistant orders and pays for this account only.
+let me = null;
+function renderAcct() {
+  const a = document.getElementById('acct');
+  if (me) { a.textContent = 'Signed in as ' + (me.name || me.email); a.removeAttribute('href'); }
+  else { a.textContent = 'Sign in to order'; a.href = '/login?next=/assist'; }
+}
+fetch('/api/auth/session').then(r => r.json()).then(s => { me = s?.user || null; renderAcct(); }).catch(renderAcct);
 let rpcId = 0;
 async function callTool(name, args) {
   const r = await fetch('/api/mcp', { method: 'POST',
@@ -97,12 +111,51 @@ function searchTerm(s) {
   return s.toLowerCase().replace(/\\b(alexa|please|can you|could you|find me|find|show me|show|search for|search|look for|i want|i need|get me|some|a|an|any)\\b/g, ' ')
     .replace(/\\b(under|below|less than|cheaper than)\\b.*$/, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\\s+/g, ' ').trim();
 }
-function remember(data) { if (data?.products?.length) sessionMem.lastProducts = data.products.map(p => ({ id: p.id })); }
+function remember(data) {
+  if (data?.products?.length) { sessionMem.lastProducts = data.products.map(p => ({ id: p.id })); sessionMem.lastProduct = null; }
+  if (data?.product) sessionMem.lastProduct = { id: data.product.id };
+}
+// Ordering is two steps: prepare_order reads the order back, and place_order
+// only runs after the customer says yes to it.
+async function prepare(args) {
+  const r = await callTool('prepare_order', args);
+  sessionMem.pending = r.data?.confirmation || null;
+  sessionMem.awaitingPhone = r.data?.needPhone ? args.items : null;
+  if (r.data?.signIn) { me = null; renderAcct(); }
+  return { tool: 'prepare_order', args, ...r };
+}
+const QTY_WORDS = { two: 2, three: 3, four: 4, five: 5 };
 async function think(u) {
   const lower = u.toLowerCase();
   const orderId = u.match(ORDER_RE)?.[1]?.replace(/\\s/g, '-').toUpperCase();
   const phone = u.match(PHONE_RE)?.[0]?.replace(/\\s/g, '');
-  if (/\\b(order|track|where is my|package)\\b/.test(lower) || orderId || (sessionMem.pendingOrder && phone)) {
+  if (sessionMem.pending && /\\b(yes|yeah|yep|sure|ok|okay|confirm|go ahead|place it|place the order|do it|no|nope|cancel|stop|never mind)\\b/.test(lower)) {
+    const confirmation = sessionMem.pending; sessionMem.pending = null;
+    if (/\\b(no|nope|cancel|stop|never mind)\\b/.test(lower)) return { speech: "Okay, I won't place that order." };
+    const r = await callTool('place_order', { confirmation });
+    if (r.data?.orderId) sessionMem.lastOrderId = r.data.orderId;
+    return { tool: 'place_order', args: { confirmation: '(from prepare_order)' }, ...r };
+  }
+  if (sessionMem.awaitingPhone && phone) return await prepare({ items: sessionMem.awaitingPhone, phone });
+  if (/\\b(my orders|order history|recent orders|what (have|did) i order(ed)?)\\b/.test(lower)) {
+    return { tool: 'my_orders', args: {}, ...(await callTool('my_orders', {})) };
+  }
+  if (/\\b(paid|payment|go through|went through)\\b/.test(lower) && (orderId || sessionMem.lastOrderId)) {
+    const args = { order_id: orderId || sessionMem.lastOrderId };
+    return { tool: 'payment_status', args, ...(await callTool('payment_status', args)) };
+  }
+  if (/\\b(buy|purchase|order (it|this|that|them|one|two|three|four|five|the|\\d)|add (it|this|that|the)|i('ll| will) take)\\b/.test(lower)) {
+    const qm = lower.match(/\\b(\\d+|two|three|four|five)\\s+(of (them|it|those|these)|pieces|units|pcs)\\b/);
+    const quantity = qm ? (Number(qm[1]) || QTY_WORDS[qm[1]]) : 1;
+    const rest = qm ? lower.replace(qm[0], ' ') : lower;
+    const idx = ORDINALS.find(([re]) => re.test(rest))?.[1];
+    const list = sessionMem.lastProducts;
+    const pick = idx != null && list.length ? list[Math.min(idx, list.length - 1)] : sessionMem.lastProduct || list[0];
+    if (!pick) return { speech: 'Tell me what you want first, for example "find wireless earbuds", then say "order the first one".' };
+    const args = { items: [{ product_id: pick.id, quantity }] }; if (phone) args.phone = phone;
+    return await prepare(args);
+  }
+  if (/\\b(track|where is my|package|order status)\\b/.test(lower) || orderId || (sessionMem.pendingOrder && phone)) {
     const id = orderId || sessionMem.pendingOrder;
     if (!id) return { speech: "Sure. What's your order number? It starts with M S E." };
     if (!phone) { sessionMem.pendingOrder = id; return { speech: \`Got it, order \${id}. For your security, what phone number did you use at checkout?\` }; }
@@ -115,7 +168,8 @@ async function think(u) {
   if (/\\b(how much|price|cost|shipping|breakdown|deliver)\\b/.test(lower) && sessionMem.lastProducts.length) {
     const idx = ORDINALS.find(([re]) => re.test(lower))?.[1] ?? 0;
     const pick = sessionMem.lastProducts[Math.min(idx, sessionMem.lastProducts.length - 1)];
-    const args = { product_id: pick.id }; return { tool: 'get_price_quote', args, ...(await callTool('get_price_quote', args)) };
+    const args = { product_id: pick.id }; const r = await callTool('get_price_quote', args); remember(r.data);
+    return { tool: 'get_price_quote', args, ...r };
   }
   const query = searchTerm(u);
   if (!query) return { speech: "You can ask me to find a product, check a price, track your order or hear today's deals." };
@@ -142,6 +196,18 @@ function cards(data) {
       <div class="p">UGX \${fmt(p.totalUGX)}</div><div class="d">Delivered to Uganda · \${p.delivery.replace(/^delivery takes /, "")}</div></div></a>\`);
   }
   log.appendChild(wrap); log.scrollTop = log.scrollHeight;
+}
+function orderCard(data) {
+  const o = data?.order; if (!o) return;
+  const el = document.createElement('div'); el.className = 'order';
+  for (const l of o.lines) {
+    const row = document.createElement('div');
+    row.append(document.createTextNode(l.qty + ' × ' + l.name));
+    row.insertAdjacentHTML('beforeend', \`<span>UGX \${fmt(l.totalUGX)}</span>\`);
+    el.appendChild(row);
+  }
+  el.insertAdjacentHTML('beforeend', \`<div class="tot"><span>Total, delivered</span><span>UGX \${fmt(o.totalUGX)}</span></div>\`);
+  log.appendChild(el); log.scrollTop = log.scrollHeight;
 }
 function showCall(tool, args) {
   if (calls.firstElementChild?.style.color) calls.innerHTML = '';
@@ -225,7 +291,7 @@ async function ask(text) {
   try {
     const t = await think(text);
     if (t.tool) showCall(t.tool, t.args);
-    add('alexa', t.speech); cards(t.data);
+    add('alexa', t.speech); cards(t.data); orderCard(t.data);
     await speak(t.speech);
   } catch { add('alexa', "Sorry, something went wrong."); }
   orb.className = 'orb';

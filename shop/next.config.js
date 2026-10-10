@@ -5,10 +5,12 @@ const nextConfig = {
   // is not bundled. Its GPU and other-platform binaries are left out: they are
   // most of the package and would push the function past Vercel's size limit.
   serverExternalPackages: ['kokoro-js', '@huggingface/transformers', 'onnxruntime-node'],
-  // The ONNX binding loads libonnxruntime.so at runtime; file tracing can't see
-  // that, so ship it explicitly.
+  // File tracing can't see files loaded by path at runtime, so ship them
+  // explicitly: libonnxruntime.so (loaded by the ONNX binding) and the Kokoro
+  // voice files (read from kokoro-js/voices).
   outputFileTracingIncludes: {
     '/api/assist/tts': [
+      './node_modules/kokoro-js/voices/**',
       './node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime.so.1',
       './node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime.so.1.21.0',
       './node_modules/onnxruntime-node/bin/napi-v3/linux/x64/libonnxruntime_providers_shared.so',

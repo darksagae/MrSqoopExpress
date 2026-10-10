@@ -73,7 +73,7 @@ ${indent(read('voice.key'))}
       # Payments come first: the voice gets the CPU and memory the proxy leaves.
       Nice=10
       CPUWeight=20
-      MemoryMax=300M
+      MemoryMax=320M
       OOMScoreAdjust=500
       Restart=always
       RestartSec=5
@@ -81,8 +81,7 @@ ${indent(read('voice.key'))}
       [Install]
       WantedBy=multi-user.target`,
     // Runs after the proxy is up, so payments are back before the voice downloads.
-    // Piper peaks at ~250 MB while loading the voice (~160 MB after), so a swap
-    // file absorbs that peak on this 512 MB server. The download is retried, and
+    // A swap file is a safety net for memory peaks on this 512 MB server. The download is retried, and
     // its log is what /health shows if it failed.
     runcmd: `
   - fallocate -l 1G /swapfile

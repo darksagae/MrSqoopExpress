@@ -6,17 +6,18 @@ limit and forwards each sentence here (`POST /tts`, bearer secret, pinned
 self-signed TLS on port 8443). If this server is down, the page falls back to
 the device's own voice.
 
-It runs [Piper](https://github.com/rhasspy/piper) (MIT) with the `en_US-lessac-high`
-voice on the same $3.50 Vultr server as the payment egress proxy. On its one
-core Piper makes speech about 4x faster than it plays (~0.5 s for a short
-sentence) in ~210 MB. The Kokoro voice it replaces ran on Vercel and took
-7-14 s per sentence; Kokoro also needs 300-700 MB and is slower than real time
-on one core, so it can't share this server.
+It runs [Piper](https://github.com/rhasspy/piper) (MIT) with the `en_US-lessac-medium`
+voice on the same $3.50 Vultr server as the payment egress proxy, where it
+needs ~150 MB (~280 MB at peak, with Node). The `high` model sounds a little
+crisper, but peaks over the service's memory cap while speaking, so it swapped
+and took longer than the speech itself. The Kokoro voice before it ran on
+Vercel and took 7-14 s per sentence; Kokoro also needs 300-700 MB and is slower
+than real time on one core, so it can't share this server.
 
 systemd runs it as `mse-voice` (Debian already has a `voice` group, which
-makes a `voice` user impossible), with low CPU priority and a 300 MB memory
-cap, so payments always come first. Piper peaks at ~250 MB while loading the
-voice, so the setup adds a 1 GB swap file to absorb that on this 512 MB server.
+makes a `voice` user impossible), with low CPU priority and a 320 MB memory
+cap, so payments always come first. The setup also adds a 1 GB swap file as a
+safety net for memory peaks.
 
 `/health` says why the voice isn't ready (e.g. `piper ENOENT`) and shows the
 end of `/var/log/voice-setup.log`. Only Vercel can reach port 8443 from our
@@ -36,7 +37,7 @@ with the `EGRESS_CHECK_TOKEN` bearer.
 3. Set it as the instance's user-data and reinstall the instance through the
    Vultr API. The IP stays the same, so LipaPay's whitelist is unaffected. The
    proxy is back within a few minutes; the voice follows once Piper and the
-   voice model (~140 MB) are downloaded.
+   voice model (~90 MB) are downloaded.
 
 ## Connect the shop (Vercel project "shop")
 

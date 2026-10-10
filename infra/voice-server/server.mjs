@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 /**
- * Sqoop Assist voice server: Piper (MIT, open source) with the "Lessac" voice,
- * on the same small Vultr server as the payment egress proxy. On one core Piper
- * makes speech about 4x faster than it plays and needs ~160 MB. The Kokoro
- * voice it replaces needed 300-700 MB and, on Vercel, took 7-14 s per sentence.
+ * Sqoop Assist voice server: Piper (MIT, open source) with the "Lessac" voice
+ * (medium quality), on the same 512 MB Vultr server as the payment egress
+ * proxy. It needs ~100-220 MB and makes speech many times faster than it plays.
+ * The high-quality model peaked over the service's memory cap while speaking,
+ * which made it swap and take longer than the speech itself. The Kokoro voice
+ * before that needed 300-700 MB and, on Vercel, took 7-14 s per sentence.
  *
  *   POST /tts  {"text": "..."}  Authorization: Bearer <VOICE_SECRET>  ->  audio/wav
  *   GET  /health                                                      ->  ok | loading
@@ -25,13 +27,13 @@ import readline from 'node:readline';
 const PORT = Number(process.env.PORT || 8443);
 const SECRET = process.env.VOICE_SECRET || '';
 const PIPER_BIN = process.env.PIPER_BIN || '/opt/voice/piper/piper';
-const PIPER_MODEL = process.env.PIPER_MODEL || '/opt/voice/en_US-lessac-high.onnx';
+const PIPER_MODEL = process.env.PIPER_MODEL || '/opt/voice/en_US-lessac-medium.onnx';
 const OUT_DIR = process.env.OUT_DIR || '/tmp/voice';
 const SETUP_LOG = '/var/log/voice-setup.log';
 const MAX_CHARS = 300;
 const MAX_WAITING = 8; // sentences queued before we answer "busy" (keeps each under the timeout)
 const JOB_TIMEOUT_MS = 20000;
-const CACHE_MAX = 200; // ~200 KB each
+const CACHE_MAX = 30; // ~200 KB each; memory is tight on this server
 
 if (SECRET.length < 24) throw new Error('VOICE_SECRET must be at least 24 characters');
 

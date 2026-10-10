@@ -1,12 +1,17 @@
 /**
  * Kokoro-82M (Apache-2.0): a free, open-source text-to-speech model that
  * runs on this server, so every visitor hears the same natural voice at no
- * per-answer cost. The ~90 MB model downloads to /tmp on a cold start and is
- * then reused by that instance.
+ * per-answer cost. The model downloads to /tmp on a cold start and is then
+ * reused by that instance.
+ *
+ * Full precision (fp32, 326 MB) is the default: on a single CPU it generates
+ * about 3x faster than the 8-bit model (1.6 s vs 4.6 s for 5.8 s of speech),
+ * which is the difference between speaking faster or slower than real time.
  */
 
 const MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 export const VOICE = process.env.ASSIST_KOKORO_VOICE || 'af_heart';
+const DTYPE = process.env.ASSIST_KOKORO_DTYPE || 'fp32';
 
 let loading = null;
 
@@ -17,7 +22,7 @@ export function getKokoro() {
       // The deployment is read-only; /tmp is the only writable place on Vercel.
       env.cacheDir = '/tmp/hf-cache';
       const { KokoroTTS } = await import('kokoro-js');
-      return KokoroTTS.from_pretrained(MODEL, { dtype: 'q8', device: 'cpu' });
+      return KokoroTTS.from_pretrained(MODEL, { dtype: DTYPE, device: 'cpu' });
     })().catch((error) => {
       loading = null; // let the next request retry
       throw error;

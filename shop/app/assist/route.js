@@ -148,13 +148,56 @@ function showCall(tool, args) {
   document.getElementById('lastcall').textContent = 'MCP tools/call → ' + tool;
   calls.insertAdjacentHTML('afterbegin', \`<div class="call"><b>tools/call</b> \${tool}\\n\${JSON.stringify(args, null, 2)}</div>\`);
 }
-function speak(text) {
+// Best voice first: ElevenLabs through /api/assist/tts, else the nicest voice the device has.
+const player = new Audio();
+let ttsOff = false, unlocked = false;
+function unlockAudio() {
+  // iOS only lets audio play after a tap, so prime the player on the first one.
+  if (unlocked) return; unlocked = true;
+  player.src = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwwAAAAAAAAAAAAEluZm8AAAAPAAAABgAAAykAWlpaWlpaWlpaWlpaWlpaWnt7e3t7e3t7e3t7e3t7e3t7nJycnJycnJycnJycnJycnL29vb29vb29vb29vb29vb293t7e3t7e3t7e3t7e3t7e3t7/////////////////////AAAAAExhdmM2MC4zMQAAAAAAAAAAAAAAACQCowAAAAAAAAMpso+sIAAAAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NCxKMAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//NAxKQAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/80LEowAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=';
+  player.play().then(() => player.pause()).catch(() => {});
+}
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+document.addEventListener('keydown', unlockAudio, { once: true });
+
+function bestDeviceVoice() {
+  const voices = speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith('en'));
+  const prefer = ['natural', 'neural', 'premium', 'enhanced', 'google us english', 'samantha', 'ava', 'jenny', 'aria', 'zira'];
+  for (const word of prefer) {
+    const v = voices.find(x => x.name.toLowerCase().includes(word));
+    if (v) return v;
+  }
+  return voices.find(v => v.lang === 'en-US') || voices[0];
+}
+if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
+
+function speakWithDevice(text) {
   return new Promise(resolve => {
-    if (!('speechSynthesis' in window) || window.SILENT) return resolve();
-    const u = new SpeechSynthesisUtterance(text.replace(/M S E/g, 'M S E'));
-    u.rate = 1.02; u.onend = u.onerror = resolve;
-    orb.className = 'orb speaking'; speechSynthesis.speak(u);
-  }).finally(() => orb.className = 'orb');
+    if (!('speechSynthesis' in window)) return resolve();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = bestDeviceVoice(); if (v) u.voice = v;
+    u.rate = 1.0; u.onend = u.onerror = resolve;
+    speechSynthesis.speak(u);
+  });
+}
+async function speakWithElevenLabs(text) {
+  if (ttsOff) return false;
+  try {
+    const r = await fetch('/api/assist/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: text.slice(0, 600) }) });
+    if (r.status === 503) { ttsOff = true; return false; }
+    if (!r.ok) return false;
+    const url = URL.createObjectURL(await r.blob());
+    player.src = url;
+    await new Promise(resolve => { player.onended = player.onerror = resolve; player.play().catch(resolve); });
+    URL.revokeObjectURL(url);
+    return true;
+  } catch { return false; }
+}
+async function speak(text) {
+  if (window.SILENT) return;
+  orb.className = 'orb speaking';
+  try { if (!(await speakWithElevenLabs(text))) await speakWithDevice(text); }
+  finally { orb.className = 'orb'; }
 }
 async function ask(text) {
   add('you', text); orb.className = 'orb thinking';

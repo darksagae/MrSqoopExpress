@@ -1,20 +1,23 @@
+import { speak } from '@/lib/assist/kokoro';
+
 /**
- * POST /api/assist/tts  { text }
+ * POST /api/assist/tts  { text }  ->  audio/wav
  *
- * Speaks a Sqoop Assist answer with an ElevenLabs voice for the /assist demo
- * page. Off unless ELEVENLABS_API_KEY is set; the page then falls back to the
- * browser's own voice. Every call spends ElevenLabs credits, so requests must
- * come from this site, text is capped, and each visitor is rate limited.
+ * Speaks one sentence of a Sqoop Assist answer for the /assist demo page with
+ * Kokoro, a free open-source voice running on this server. The page sends an
+ * answer sentence by sentence so speech starts quickly. Generating audio uses
+ * server CPU, so requests must come from this site, sentences are capped and
+ * each visitor is rate limited.
  */
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+export const maxDuration = 60;
 
-const VOICE_ID = process.env.ASSIST_VOICE_ID || 'cgSgspJ2msm6clMCkdW9'; // Jessica
-const MODEL_ID = 'eleven_flash_v2_5'; // fastest and cheapest
-const MAX_CHARS = 600;
-const LIMIT = 20; // answers per visitor per window
+const MAX_CHARS = 300;
+const LIMIT = 60; // sentences per visitor per window
 const WINDOW_MS = 10 * 60 * 1000;
 
-// Per-instance only, but enough to stop one visitor running up the bill.
+// Per-instance only, but enough to stop one visitor hogging the server.
 const hits = new Map();
 function allowed(ip) {
   const now = Date.now();
@@ -36,30 +39,32 @@ function sameSite(request) {
   }
 }
 
+// The same short prompts ("What's your order number?") come up again and again.
+const cache = new Map();
+const CACHE_MAX = 50;
+
 export async function POST(request) {
-  const key = process.env.ELEVENLABS_API_KEY;
-  if (!key) return Response.json({ error: 'Voice is not configured.' }, { status: 503 });
   if (!sameSite(request)) return Response.json({ error: 'Not allowed.' }, { status: 403 });
 
   const ip = (request.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
   if (!allowed(ip)) return Response.json({ error: 'Too many requests.' }, { status: 429 });
 
   const { text } = await request.json().catch(() => ({}));
-  if (typeof text !== 'string' || !text.trim() || text.length > MAX_CHARS) {
-    return Response.json({ error: 'Text is required (max 600 characters).' }, { status: 400 });
+  const sentence = typeof text === 'string' ? text.trim() : '';
+  if (!sentence || sentence.length > MAX_CHARS) {
+    return Response.json({ error: 'Text is required (max 300 characters).' }, { status: 400 });
   }
 
-  const res = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}?output_format=mp3_44100_64`,
-    {
-      method: 'POST',
-      headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: MODEL_ID }),
+  try {
+    let wav = cache.get(sentence);
+    if (!wav) {
+      wav = await speak(sentence);
+      if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value);
+      cache.set(sentence, wav);
     }
-  );
-  if (!res.ok) {
-    console.error('[assist/tts] ElevenLabs error', res.status, (await res.text()).slice(0, 200));
-    return Response.json({ error: 'Voice is unavailable right now.' }, { status: 502 });
+    return new Response(wav, { headers: { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    console.error('[assist/tts] Kokoro failed:', error);
+    return Response.json({ error: 'Voice is unavailable right now.' }, { status: 503 });
   }
-  return new Response(res.body, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'no-store' } });
 }

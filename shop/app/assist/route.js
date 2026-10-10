@@ -180,23 +180,44 @@ function speakWithDevice(text) {
     speechSynthesis.speak(u);
   });
 }
-async function speakWithElevenLabs(text) {
-  if (ttsOff) return false;
-  try {
-    const r = await fetch('/api/assist/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: text.slice(0, 600) }) });
-    if (r.status === 503) { ttsOff = true; return false; }
-    if (!r.ok) return false;
-    const url = URL.createObjectURL(await r.blob());
+// Kokoro (free, open-source) on this server, one sentence at a time so speech
+// starts quickly. Falls back to the device voice if the server is slow or busy.
+const FIRST_SENTENCE_WAIT_MS = 12000;
+function sentences(text) {
+  return text.split(/(?<=[.!?])\\s+/).map(s => s.trim()).filter(Boolean)
+    .flatMap(s => s.length <= 280 ? [s] : s.match(/.{1,280}(\\s|$)/g).map(x => x.trim()));
+}
+function fetchVoice(sentence) {
+  return fetch('/api/assist/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: sentence }) })
+    .then(r => r.ok ? r.blob() : null).catch(() => null);
+}
+function playBlob(blob) {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(blob);
     player.src = url;
-    await new Promise(resolve => { player.onended = player.onerror = resolve; player.play().catch(resolve); });
-    URL.revokeObjectURL(url);
-    return true;
-  } catch { return false; }
+    player.onended = player.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    player.play().catch(() => { URL.revokeObjectURL(url); resolve(); });
+  });
+}
+async function speakWithServerVoice(text) {
+  if (ttsOff) return false;
+  const parts = sentences(text);
+  if (!parts.length) return true;
+  let next = fetchVoice(parts[0]);
+  const first = await Promise.race([next, new Promise(r => setTimeout(() => r('slow'), FIRST_SENTENCE_WAIT_MS))]);
+  if (!first || first === 'slow') return false;
+  for (let i = 0; i < parts.length; i++) {
+    const blob = i === 0 ? first : await next;
+    if (i + 1 < parts.length) next = fetchVoice(parts[i + 1]);
+    if (!blob) { await speakWithDevice(parts.slice(i).join(' ')); return true; }
+    await playBlob(blob);
+  }
+  return true;
 }
 async function speak(text) {
   if (window.SILENT) return;
   orb.className = 'orb speaking';
-  try { if (!(await speakWithElevenLabs(text))) await speakWithDevice(text); }
+  try { if (!(await speakWithServerVoice(text))) await speakWithDevice(text); }
   finally { orb.className = 'orb'; }
 }
 async function ask(text) {

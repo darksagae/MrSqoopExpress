@@ -21,8 +21,9 @@ export function voiceCloudInit(dir) {
     packages: `
   - ca-certificates
   - curl`,
+    // Not "voice": Debian already has a system group by that name, so useradd fails.
     users: `
-  - name: voice
+  - name: mse-voice
     system: true
     shell: /usr/sbin/nologin`,
     files: `
@@ -42,6 +43,10 @@ ${indent(read('voice.crt'))}
     permissions: '0600'
     content: |
 ${indent(read('voice.key'))}
+  - path: /etc/sysctl.d/90-swappiness.conf
+    permissions: '0644'
+    content: |
+      vm.swappiness=10
   - path: /etc/voice.env
     permissions: '0600'
     content: |
@@ -58,7 +63,7 @@ ${indent(read('voice.key'))}
       Wants=network-online.target
 
       [Service]
-      User=voice
+      User=mse-voice
       EnvironmentFile=/etc/voice.env
       ExecStart=/usr/bin/node /opt/voice/server.mjs
       NoNewPrivileges=true
@@ -76,9 +81,18 @@ ${indent(read('voice.key'))}
       [Install]
       WantedBy=multi-user.target`,
     // Runs after the proxy is up, so payments are back before the voice downloads.
+    // Piper peaks at ~250 MB while loading the voice (~160 MB after), so a swap
+    // file absorbs that peak on this 512 MB server. The download is retried, and
+    // its log is what /health shows if it failed.
     runcmd: `
-  - chown voice:voice /opt/voice/voice.key
-  - /opt/voice/setup.sh
+  - fallocate -l 1G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - "echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+  - sysctl -p /etc/sysctl.d/90-swappiness.conf
+  - chown mse-voice:mse-voice /opt/voice/voice.key
+  - 'for i in 1 2 3 4 5; do /opt/voice/setup.sh >> /var/log/voice-setup.log 2>&1 && echo "setup ok" >> /var/log/voice-setup.log && break; sleep 15; done'
   - ufw allow 8443/tcp
   - systemctl daemon-reload
   - systemctl enable --now voice`,

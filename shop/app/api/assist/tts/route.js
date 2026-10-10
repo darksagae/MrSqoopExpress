@@ -1,4 +1,4 @@
-import { Agent, fetch as undiciFetch } from 'undici';
+import { isVoiceServerConfigured, voiceServerFetch } from '@/lib/assist/voice-server';
 
 /**
  * POST /api/assist/tts  { text }  ->  audio/wav
@@ -9,11 +9,6 @@ import { Agent, fetch as undiciFetch } from 'undici';
  * Vultr server as the payment proxy); this route only checks the request and
  * passes it on. If the voice server is unreachable the page falls back to the
  * device's own voice.
- *
- * Env:
- *   VOICE_SERVER_URL     https://<server-ip>:8443
- *   VOICE_SERVER_SECRET  shared secret the voice server expects
- *   VOICE_SERVER_CA      the voice server's self-signed certificate (PEM; \n escapes ok)
  */
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -46,17 +41,6 @@ function sameSite(request) {
   }
 }
 
-// The voice server's certificate is self-signed and pinned: only that exact
-// certificate is trusted, so the IP not matching a hostname is irrelevant.
-let agent = null;
-function voiceAgent() {
-  if (!agent) {
-    const ca = process.env.VOICE_SERVER_CA.replace(/\\n/g, '\n');
-    agent = new Agent({ connect: { ca, checkServerIdentity: () => undefined } });
-  }
-  return agent;
-}
-
 export async function POST(request) {
   if (!sameSite(request)) return Response.json({ error: 'Not allowed.' }, { status: 403 });
 
@@ -69,17 +53,15 @@ export async function POST(request) {
     return Response.json({ error: 'Text is required (max 300 characters).' }, { status: 400 });
   }
 
-  const { VOICE_SERVER_URL, VOICE_SERVER_SECRET, VOICE_SERVER_CA } = process.env;
-  if (!VOICE_SERVER_URL || !VOICE_SERVER_SECRET || !VOICE_SERVER_CA) {
+  if (!isVoiceServerConfigured()) {
     return Response.json({ error: 'Voice is unavailable right now.' }, { status: 503 });
   }
 
   try {
-    const res = await undiciFetch(`${VOICE_SERVER_URL.replace(/\/$/, '')}/tts`, {
+    const res = await voiceServerFetch('/tts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${VOICE_SERVER_SECRET}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: sentence }),
-      dispatcher: voiceAgent(),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`voice server answered ${res.status}`);

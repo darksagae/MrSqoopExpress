@@ -13,8 +13,15 @@ sentence) in ~210 MB. The Kokoro voice it replaces ran on Vercel and took
 7-14 s per sentence; Kokoro also needs 300-700 MB and is slower than real time
 on one core, so it can't share this server.
 
-systemd gives the voice low CPU priority and caps it at 300 MB, so payments
-always come first.
+systemd runs it as `mse-voice` (Debian already has a `voice` group, which
+makes a `voice` user impossible), with low CPU priority and a 300 MB memory
+cap, so payments always come first. Piper peaks at ~250 MB while loading the
+voice, so the setup adds a 1 GB swap file to absorb that on this 512 MB server.
+
+`/health` says why the voice isn't ready (e.g. `piper ENOENT`) and shows the
+end of `/var/log/voice-setup.log`. Only Vercel can reach port 8443 from our
+side, so read it through the shop: `GET /api/admin/egress-check?voice=1`
+with the `EGRESS_CHECK_TOKEN` bearer.
 
 ## Install (on the egress server)
 

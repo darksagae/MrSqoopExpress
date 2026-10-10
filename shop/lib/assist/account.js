@@ -86,7 +86,12 @@ export async function myOrders(account) {
 export async function prepareOrder(account, { items, phone, promo_code }) {
   if (!account) return { speech: SIGN_IN, data: { signIn: true } };
 
-  const cart = (items || []).map((i) => ({ id: String(i.product_id), qty: Math.max(1, Math.round(Number(i.quantity) || 1)) }));
+  const cart = (items || []).map((i) => ({
+    id: String(i.product_id),
+    qty: Math.max(1, Math.round(Number(i.quantity) || 1)),
+    // The exact colour/size, when the customer picked one (e.g. from their cart).
+    ...(i.sku_id ? { skuId: String(i.sku_id) } : {}),
+  }));
   const last = await lastDetails(account);
   const payPhone = phone || last.phone;
   if (!payPhone) {

@@ -4,8 +4,19 @@ import { myOrders, paymentStatus, placeOrder, prepareOrder } from './account';
 import { getProduct, getTrending, searchProducts, trackOrder } from './store';
 import { deliveryPhrase, shillings, shortTitle, totalOf } from './voice';
 
-// Voice answers stay short: nobody wants twenty products read aloud.
+// Voice answers stay short: nobody wants twenty products read aloud. Screens
+// show a longer row of cards.
 const SPOKEN_RESULTS = 3;
+const SHOWN_RESULTS = 8;
+const PAGE_SIZE = 20;
+
+const SORTS = {
+  price_low: (a, b) => totalOf(a) - totalOf(b),
+  price_high: (a, b) => totalOf(b) - totalOf(a),
+  rating: (a, b) => (b.rating || 0) - (a.rating || 0) || (b.sold || 0) - (a.sold || 0),
+  popular: (a, b) => (b.sold || 0) - (a.sold || 0),
+};
+const SORT_WORDS = { price_low: 'cheapest first', price_high: 'priciest first', rating: 'best rated first', popular: 'best sellers first' };
 
 const text = (t) => [{ type: 'text', text: t }];
 
@@ -28,6 +39,8 @@ export function createAssistServer(base, { account = null } = {}) {
     freeShipping: Boolean(p.shipping?.free),
     totalUGX: totalOf(p),
     originalUGX: p.originalUGX ?? null,
+    // The pre-discount price delivered, so it compares like for like with totalUGX.
+    originalTotalUGX: p.originalUGX > p.priceUGX ? totalOf(p) + (p.originalUGX - p.priceUGX) : null,
     discountPct: p.discountPct ?? null,
     rating: p.rating ?? null,
     sold: p.sold ?? null,
@@ -43,24 +56,45 @@ export function createAssistServer(base, { account = null } = {}) {
       title: 'Search products',
       description:
         'Search the Mr Sqoop Express catalogue for products that can be delivered to Uganda. ' +
-        'Optionally limit to a maximum total price in Uganda shillings (item + handling + shipping).',
+        'Prices are totals in Uganda shillings (item + handling + shipping). Optionally filter by ' +
+        'price, sort, and page through more results.',
       inputSchema: {
         query: z.string().min(1).describe('What the customer is looking for, e.g. "wireless earbuds"'),
         max_price_ugx: z.number().positive().optional().describe('Maximum total price in UGX'),
+        min_price_ugx: z.number().positive().optional().describe('Minimum total price in UGX'),
+        sort: z.enum(['relevance', 'price_low', 'price_high', 'rating', 'popular']).optional().describe('Order of results'),
+        page: z.number().int().min(1).max(10).optional().describe('Results page, for "show me more"'),
       },
     },
-    async ({ query, max_price_ugx }) => {
-      let products = await searchProducts(base, query, 20);
-      if (max_price_ugx) products = products.filter((p) => totalOf(p) <= max_price_ugx);
-      const top = products.slice(0, SPOKEN_RESULTS);
-      if (!top.length) {
-        const limit = max_price_ugx ? ` under ${shillings(max_price_ugx)}` : '';
-        return { content: text(`I couldn't find any ${query}${limit} that we can deliver to Uganda right now.`) };
+    async ({ query, max_price_ugx, min_price_ugx, sort, page = 1 }) => {
+      const inRange = (p) => (!max_price_ugx || totalOf(p) <= max_price_ugx) && (!min_price_ugx || totalOf(p) >= min_price_ugx);
+      let fetched = await searchProducts(base, query, PAGE_SIZE, page);
+      let hasMore = fetched.length >= PAGE_SIZE;
+      let products = fetched.filter(inRange);
+      // A tight budget can filter out most of a page: look one page further
+      // (one extra supplier call at most, to stay within their rate limit).
+      if (products.length < SPOKEN_RESULTS && hasMore && (max_price_ugx || min_price_ugx)) {
+        fetched = await searchProducts(base, query, PAGE_SIZE, page + 1);
+        hasMore = fetched.length >= PAGE_SIZE;
+        products = products.concat(fetched.filter(inRange));
       }
+      if (sort && SORTS[sort]) products = [...products].sort(SORTS[sort]);
+      const shown = products.slice(0, SHOWN_RESULTS);
+      const meta = { query, page, hasMore, sort: sort || 'relevance', max_price_ugx: max_price_ugx || null, min_price_ugx: min_price_ugx || null };
+      if (!shown.length) {
+        const limit = max_price_ugx ? ` under ${shillings(max_price_ugx)}` : min_price_ugx ? ` over ${shillings(min_price_ugx)}` : '';
+        const more = page > 1 ? 'more ' : '';
+        return {
+          content: text(`I couldn't find any ${more}${query}${limit} that we can deliver to Uganda right now.`),
+          structuredContent: { products: [], ...meta },
+        };
+      }
+      const top = shown.slice(0, SPOKEN_RESULTS);
+      const order = sort && SORT_WORDS[sort] ? `, ${SORT_WORDS[sort]}` : '';
       const lines = top.map((p, i) => `${i + 1}. ${shortTitle(p.title)} for ${shillings(totalOf(p))} delivered`);
       return {
-        content: text(`Here are ${top.length} options for ${query}. ${lines.join('. ')}. Want the full price breakdown for any of these?`),
-        structuredContent: { products: top.map(card) },
+        content: text(`Here are ${shown.length} options for ${query}${order}. ${lines.join('. ')}. Want the full price breakdown for any of these?`),
+        structuredContent: { products: shown.map(card), ...meta },
       };
     }
   );
@@ -83,7 +117,26 @@ export function createAssistServer(base, { account = null } = {}) {
           `The ${shortTitle(p.title)} costs ${shillings(p.priceUGX)}, plus a ${shillings(p.handlingUGX)} handling fee and ${shipping}. ` +
             `That's ${shillings(totalOf(p))} in total, delivered to Uganda, and ${deliveryPhrase(s)}. You can pay with MTN or Airtel Mobile Money.`
         ),
-        structuredContent: { product: card(p) },
+        structuredContent: {
+          product: {
+            ...card(p),
+            images: (p.images || []).slice(0, 6),
+            // Colours, sizes and other options, as the product page lists them.
+            options: (p.variants || []).map((v) => v.label).filter((l) => l && l !== 'Default').slice(0, 12),
+            // The first few distinct specs, e.g. brand, material, battery.
+            specs: Object.values(
+              Object.fromEntries((p.specs || []).filter((s) => s?.name && s?.value).map((s) => [s.name, s]))
+            )
+              .filter((s) => !/^origin$/i.test(s.name))
+              .slice(0, 6)
+              .map((s) => ({ name: s.name, value: String(s.value).slice(0, 60) })),
+            reviews: p.reviews ?? null,
+            sold: p.sold ?? p.sales ?? null,
+            shippingUGX: s?.known ? s.costUGX : null,
+            minDays: s?.minDays ?? null,
+            maxDays: s?.maxDays ?? null,
+          },
+        },
       };
     }
   );
@@ -122,9 +175,9 @@ export function createAssistServer(base, { account = null } = {}) {
       inputSchema: {},
     },
     async () => {
-      const products = (await getTrending(base, 8)).slice(0, SPOKEN_RESULTS);
+      const products = (await getTrending(base, SHOWN_RESULTS)).slice(0, SHOWN_RESULTS);
       if (!products.length) return { content: text('There are no deals to share right now.') };
-      const lines = products.map((p) => {
+      const lines = products.slice(0, SPOKEN_RESULTS).map((p) => {
         const off = p.discountPct ? `, ${p.discountPct} percent off` : '';
         return `${shortTitle(p.title)} for ${shillings(totalOf(p))} delivered${off}`;
       });
@@ -158,7 +211,13 @@ export function createAssistServer(base, { account = null } = {}) {
         'Uses the Mobile Money number from their last order unless they give one.',
       inputSchema: {
         items: z
-          .array(z.object({ product_id: z.string().min(1), quantity: z.number().int().min(1).max(50).optional() }))
+          .array(
+            z.object({
+              product_id: z.string().min(1),
+              quantity: z.number().int().min(1).max(50).optional(),
+              sku_id: z.string().optional().describe('A specific colour/size variant, if chosen'),
+            })
+          )
           .min(1)
           .max(10)
           .describe('Products to order, with quantity (default 1)'),

@@ -11,6 +11,9 @@ import './assistant.css';
 
 const ugx = (n) => 'UGX ' + new Intl.NumberFormat('en-UG').format(Math.round(n));
 const compact = (n) => (n >= 1000 ? `${Math.round(n / 100) / 10}k`.replace('.0k', 'k') : String(n));
+// Sold counts arrive as numbers (search) or text like "10000+" (product page).
+const soldText = (s) => (typeof s === 'number' ? `${compact(s)}+ sold` : s ? `${String(s).replace(/(\d)(?=(\d{3})+\b)/g, '$1,')} sold` : null);
+const toCartItem = (p) => ({ id: p.id, name: p.title, price: p.priceUGX, img: p.image || p.images?.[0], skuId: p.skuId, shipUGX: p.shippingUGX, handlingUGX: p.handlingUGX });
 const NETWORK = { mtn: 'MTN Mobile Money', airtel: 'Airtel Money' };
 const HIDDEN_ON = ['/checkout', '/assist'];
 let nextId = 1;
@@ -28,8 +31,45 @@ export default function Assistant({ embedded = false }) {
   const signedIn = status === 'authenticated';
   const signedInRef = useRef(signedIn);
   signedInRef.current = signedIn;
-  const brain = useMemo(() => createBrain(() => signedInRef.current), []);
-  const { add, setOpen: setCartOpen } = useCart();
+  const cartApi = useCart();
+  const { add, setOpen: setCartOpen } = cartApi;
+  // The assistant reads and changes the real cart. React updates it on the next
+  // render, so a shadow copy keeps "add, then say what's in the cart" correct.
+  const cartRef = useRef(cartApi);
+  cartRef.current = cartApi;
+  const shadow = useRef(null);
+  useEffect(() => {
+    shadow.current = null;
+  }, [cartApi.items]);
+  const nameRef = useRef(null);
+  const brain = useMemo(
+    () =>
+      createBrain({
+        signedIn: () => signedInRef.current,
+        name: () => nameRef.current,
+        cart: {
+          items: () => shadow.current || cartRef.current.items,
+          add: (p, qty) => {
+            const item = toCartItem(p);
+            cartRef.current.add(item, qty);
+            const list = [...(shadow.current || cartRef.current.items)];
+            const i = list.findIndex((c) => c.id === item.id);
+            if (i >= 0) list[i] = { ...list[i], qty: list[i].qty + qty };
+            else list.push({ ...item, qty });
+            shadow.current = list;
+          },
+          remove: (id) => {
+            cartRef.current.setQty(id, 0);
+            shadow.current = (shadow.current || cartRef.current.items).filter((c) => c.id !== id);
+          },
+          clear: () => {
+            cartRef.current.clear();
+            shadow.current = [];
+          },
+        },
+      }),
+    []
+  );
 
   const [open, setOpen] = useState(embedded);
   const [messages, setMessages] = useState([]);
@@ -46,6 +86,7 @@ export default function Assistant({ embedded = false }) {
   const inputRef = useRef(null);
 
   const firstName = session?.user?.name?.split(' ')[0];
+  nameRef.current = firstName || null;
   const push = useCallback((m) => setMessages((all) => [...all, { id: nextId++, ...m }]), []);
 
   // Greet on first open.
@@ -56,7 +97,7 @@ export default function Assistant({ embedded = false }) {
       text:
         `Hi${firstName ? ' ' + firstName : ''}! I'm Sqoop, your shopping assistant. ` +
         'I can find products, show prices delivered to Uganda, order for you and track your parcels.',
-      chips: ["Today's deals", 'Earbuds under 50,000', 'Track my order', ...(signedIn ? ['My orders'] : [])],
+      chips: ["Today's deals", 'Earbuds under 50k', 'Track my order', 'How long is delivery?', ...(signedIn ? ['My orders'] : [])],
     });
   }, [open, messages.length, status, firstName, signedIn, push]);
 
@@ -127,9 +168,30 @@ export default function Assistant({ embedded = false }) {
   };
 
   const addToCart = (p) => {
-    add({ id: p.id, name: p.title, price: p.priceUGX, img: p.image, skuId: p.skuId, shipUGX: p.shippingUGX, handlingUGX: p.handlingUGX }, 1);
+    add(toCartItem(p), 1);
     setAdded((a) => ({ ...a, [p.id]: true }));
   };
+
+  const cartButton = (p) => (
+    <button
+      type="button"
+      className={`sa-cartbtn${added[p.id] ? ' on' : ''}`}
+      onClick={() => (added[p.id] ? viewCart() : addToCart(p))}
+      aria-label={added[p.id] ? 'Added. View cart' : 'Add to cart'}
+      title={added[p.id] ? 'Added. View cart' : 'Add to cart'}
+    >
+      {added[p.id] ? (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12l5 5L19 7" /></svg>
+      ) : (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 7h12l-1 13H7L6 7z" /><path d="M9 7a3 3 0 0 1 6 0M12 11v5M9.5 13.5h5" /></svg>
+      )}
+    </button>
+  );
+  const buyButton = (p) => (
+    <button type="button" className="sa-btn" disabled={busy} onClick={() => run(() => brain.buy(p), `Buy ${p.title}`)}>
+      Buy now
+    </button>
+  );
 
   const viewCart = () => {
     if (!embedded && window.matchMedia('(max-width: 640px)').matches) setOpen(false);
@@ -195,35 +257,116 @@ export default function Assistant({ embedded = false }) {
                       <Link href={`/product/${p.id}`} className="sa-card-title" onClick={closeOnPhone}>{p.title}</Link>
                       {(p.rating || p.sold) && (
                         <div className="sa-meta">
-                          {p.rating ? <span className="sa-stars">★ {p.rating}</span> : null}
-                          {p.sold ? <span>{compact(p.sold)}+ sold</span> : null}
+                          {parseFloat(p.rating) > 0 ? <span className="sa-stars">★ {p.rating}</span> : null}
+                          {soldText(p.sold) ? <span>{soldText(p.sold)}</span> : null}
                         </div>
                       )}
                       <div className="sa-price">
                         {ugx(p.totalUGX)}
-                        {p.originalUGX > p.priceUGX && <s>{ugx(p.originalUGX)}</s>}
+                        {p.originalTotalUGX > p.totalUGX && <s>{ugx(p.originalTotalUGX)}</s>}
                       </div>
                       <div className="sa-ship">{p.freeShipping ? 'Free shipping · ' : ''}Delivered to Uganda</div>
                       <div className="sa-actions">
-                        <button
-                          type="button"
-                          className={`sa-cartbtn${added[p.id] ? ' on' : ''}`}
-                          onClick={() => (added[p.id] ? viewCart() : addToCart(p))}
-                          aria-label={added[p.id] ? 'Added. View cart' : 'Add to cart'}
-                          title={added[p.id] ? 'Added. View cart' : 'Add to cart'}
-                        >
-                          {added[p.id] ? (
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M5 12l5 5L19 7" /></svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 7h12l-1 13H7L6 7z" /><path d="M9 7a3 3 0 0 1 6 0M12 11v5M9.5 13.5h5" /></svg>
-                          )}
-                        </button>
-                        <button type="button" className="sa-btn" disabled={busy} onClick={() => run(() => brain.buy(p.id), `Buy ${p.title}`)}>
-                          Buy now
-                        </button>
+                        {cartButton(p)}
+                        {buyButton(p)}
                       </div>
                     </div>
                   </article>
+                ))}
+                {m === last && m.hasMore && (
+                  <button type="button" className="sa-more" onClick={() => ask('More options')} disabled={busy}>
+                    <span>→</span>Show more
+                  </button>
+                )}
+              </div>
+            )}
+
+            {m.detail && (
+              <div className="sa-sheet sa-detail">
+                {m.detail.images?.length > 0 && (
+                  <div className="sa-gallery">
+                    {m.detail.images.map((src) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={src} src={src} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                    ))}
+                  </div>
+                )}
+                <Link href={`/product/${m.detail.id}`} className="sa-detail-title" onClick={closeOnPhone}>{m.detail.title}</Link>
+                <div className="sa-meta">
+                  {parseFloat(m.detail.rating) > 0 ? <span className="sa-stars">★ {m.detail.rating}</span> : null}
+                  {m.detail.reviews > 0 ? <span>{new Intl.NumberFormat('en-UG').format(m.detail.reviews)} reviews</span> : null}
+                  {soldText(m.detail.sold) ? <span>{soldText(m.detail.sold)}</span> : null}
+                </div>
+                <div className="sa-breakdown">
+                  <div><span>Item</span><span>{ugx(m.detail.priceUGX)}</span></div>
+                  <div><span>Handling</span><span>{ugx(m.detail.handlingUGX)}</span></div>
+                  <div><span>Shipping to Uganda</span><span>{m.detail.freeShipping ? 'Free' : m.detail.shippingUGX != null ? ugx(m.detail.shippingUGX) : 'At checkout'}</span></div>
+                  <div className="sa-total"><span>Total, delivered</span><b>{ugx(m.detail.totalUGX)}</b></div>
+                </div>
+                {m.detail.minDays && m.detail.maxDays ? <div className="sa-pay">Delivery in about {m.detail.minDays}–{m.detail.maxDays} days</div> : null}
+                {m.detail.options?.length > 0 && (
+                  <div className="sa-options">
+                    {m.detail.options.map((o) => <span key={o}>{o}</span>)}
+                  </div>
+                )}
+                {m.detail.specs?.length > 0 && (
+                  <dl className="sa-specs">
+                    {m.detail.specs.map((sp) => (
+                      <div key={sp.name}><dt>{sp.name}</dt><dd>{sp.value}</dd></div>
+                    ))}
+                  </dl>
+                )}
+                <div className="sa-actions">
+                  {cartButton(m.detail)}
+                  {buyButton(m.detail)}
+                </div>
+              </div>
+            )}
+
+            {m.compare?.length > 1 && (
+              <div className="sa-sheet sa-compare" style={{ '--cols': m.compare.length }}>
+                <div className="sa-cmp-row sa-cmp-head">
+                  <span />
+                  {m.compare.map((p) => (
+                    <Link key={p.id} href={`/product/${p.id}`} onClick={closeOnPhone} className={p.id === m.best ? 'best' : ''}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.image} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }} />
+                      <small>{p.title}</small>
+                      {p.id === m.best && <em>Best value</em>}
+                    </Link>
+                  ))}
+                </div>
+                <div className="sa-cmp-row"><span>Price</span>{m.compare.map((p) => <b key={p.id}>{ugx(p.totalUGX)}</b>)}</div>
+                <div className="sa-cmp-row"><span>Rating</span>{m.compare.map((p) => <span key={p.id}>{parseFloat(p.rating) > 0 ? `★ ${p.rating}` : '—'}</span>)}</div>
+                <div className="sa-cmp-row"><span>Sold</span>{m.compare.map((p) => <span key={p.id}>{soldText(p.sold)?.replace(' sold', '') || '—'}</span>)}</div>
+                <div className="sa-cmp-row"><span>Shipping</span>{m.compare.map((p) => <span key={p.id}>{p.freeShipping ? 'Free' : 'Included'}</span>)}</div>
+                <div className="sa-cmp-row sa-cmp-actions"><span />{m.compare.map((p) => <span key={p.id}>{buyButton(p)}</span>)}</div>
+              </div>
+            )}
+
+            {m.cart?.length > 0 && (
+              <div className="sa-sheet">
+                <div className="sa-sheet-title">Your cart</div>
+                {m.cart.map((c) => (
+                  <div key={c.id} className="sa-line">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    {c.img ? <img src={c.img} alt="" /> : <span className="sa-line-ph" />}
+                    <span className="sa-line-name">{c.qty} × {c.name}</span>
+                    <span>{ugx(c.qty * ((c.price || 0) + (c.shipUGX || 0) + (c.handlingUGX || 0)))}</span>
+                  </div>
+                ))}
+                <div className="sa-total"><span>Total, delivered to Uganda</span><b>{ugx(m.cartTotal)}</b></div>
+                <div className="sa-actions">
+                  <button type="button" className="sa-btn ghost" onClick={viewCart}>View cart</button>
+                  <Link href="/checkout" className="sa-btn" onClick={closeOnPhone}>Checkout</Link>
+                </div>
+              </div>
+            )}
+
+            {m.links?.length > 0 && (
+              <div className="sa-chips">
+                {m.links.map((l) => (
+                  <a key={l.href} href={l.href} className="sa-chip sa-linkchip" onClick={l.href.startsWith('/') ? closeOnPhone : undefined}>{l.label} ↗</a>
                 ))}
               </div>
             )}

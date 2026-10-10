@@ -9,8 +9,8 @@ async function get(base, path) {
   return { ok: res.ok, status: res.status, body };
 }
 
-export async function searchProducts(base, keyword, limit = 12) {
-  const q = new URLSearchParams({ keyword, limit: String(limit) });
+export async function searchProducts(base, keyword, limit = 12, page = 1) {
+  const q = new URLSearchParams({ keyword, limit: String(limit), page: String(page) });
   const { ok, body } = await get(base, `/api/products?${q}`);
   if (!ok) throw new Error(body.error || 'Product search failed');
   return body.products || [];

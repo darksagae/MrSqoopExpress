@@ -20,6 +20,9 @@ import { getOrder } from '@/lib/orders';
  *
  * GET /api/admin/egress-check?order=MSE-001 (comma-separated for several)
  * returns LipaPay's record of those orders, including why a payment failed.
+ *
+ * GET /api/admin/egress-check?formats=MSE-009 runs no-charge bill enquiries on
+ * that order's number in each format, to see which ones LipaPay accepts.
  */
 function authorized(request) {
   const token = process.env.EGRESS_CHECK_TOKEN;
@@ -40,9 +43,48 @@ async function voiceHealth() {
   }
 }
 
+/** Keep a number's shape (prefix, length) but hide who it is. */
+const maskNumber = (n) => String(n ?? '').replace(/^(\d{3})(\d+)(\d{2})$/, (_, a, m, b) => a + '•'.repeat(m.length) + b);
+
+/**
+ * How LipaPay treats an order's own phone number in each format it might
+ * accept, with auto-detect and with that network's channel. Bill enquiries
+ * charge nothing. Account-holder names are left out of the reply.
+ */
+async function numberFormats(orderId) {
+  const o = await getOrder(orderId);
+  if (!o) return { error: `No order ${orderId}` };
+  let n = String(o.customer_phone || '').replace(/\D/g, '');
+  if (n.startsWith('256')) n = n.slice(3);
+  if (n.startsWith('0')) n = n.slice(1);
+  const channel = { mtn: 1, airtel: 2 }[o.network];
+  const tries = [];
+  for (const [format, traderId] of [['local 0XXXXXXXXX', '0' + n], ['national XXXXXXXXX', n], ['international 256XXXXXXXXX', '256' + n]]) {
+    for (const ch of [0, channel]) {
+      try {
+        const r = await billEnquiry({ phone: traderId, traderId, channel: ch });
+        tries.push({
+          format,
+          channel: ch,
+          ok: r.ok,
+          statusCode: r.statusCode,
+          errors: r.errors,
+          lipapayUsed: r.data ? maskNumber(r.data.TraderID) : null,
+          fields: r.data ? Object.keys(r.data) : null,
+        });
+      } catch (e) {
+        tries.push({ format, channel: ch, error: e.message });
+      }
+    }
+  }
+  return { order: orderId, network: o.network, tries };
+}
+
 export async function GET(request) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (new URL(request.url).searchParams.get('voice')) return NextResponse.json(await voiceHealth());
+  const formatsOf = new URL(request.url).searchParams.get('formats');
+  if (formatsOf) return NextResponse.json(await numberFormats(formatsOf.trim()));
   const orders = new URL(request.url).searchParams.get('order');
   if (orders) {
     const ids = orders.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 20);

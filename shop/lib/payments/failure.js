@@ -19,7 +19,8 @@ export function explainFailure(network, reason) {
       'Top up or use another number, then try again.'
     );
   }
-  if (/not found|EXPIRED|TIMEOUT|timed out/i.test(r)) {
+  // MTN reports a prompt left unanswered as COULD_NOT_PERFORM_TRANSACTION.
+  if (/not found|EXPIRED|TIMEOUT|timed out|COULD_NOT_PERFORM/i.test(r)) {
     return (
       `${wallet} didn't receive an approval in time. If no PIN prompt appeared on your phone, ` +
       `check the number is registered for ${wallet} and try again.`

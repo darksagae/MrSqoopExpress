@@ -209,14 +209,15 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
  *
  * @returns {{ ok: boolean, statusCode: number, errors: string|null, data: object|null }}
  */
-export async function billEnquiry({ phone, amountUGX = MIN_AMOUNT_UGX }) {
+export async function billEnquiry({ phone, amountUGX = MIN_AMOUNT_UGX, channel = 0, traderId }) {
   const { json } = await call('/api/pay/bill', {
     Version: 'v1.0',
     MchID: Number(MCH_ID),
     TimeStamp: Math.floor(Date.now() / 1000),
-    Channel: 0, // auto-detect MTN vs Airtel from the prefix
+    Channel: channel, // 0 auto-detects MTN vs Airtel from the prefix
     TransactionType: 1,
-    TraderID: normalizeMsisdn(phone),
+    // traderId: the number exactly as given, for the admin check's format test.
+    TraderID: traderId || normalizeMsisdn(phone),
     Amount: Math.round(amountUGX) * 100,
   });
   return {

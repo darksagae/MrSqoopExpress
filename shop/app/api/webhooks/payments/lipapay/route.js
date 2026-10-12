@@ -1,5 +1,5 @@
 import { getPaymentStatus, verifySignature, RESULT_FIELDS, payStatusToString } from '@/lib/payments/lipapay';
-import { settlePayment } from '@/lib/orders';
+import { noteFailureReason, settlePayment } from '@/lib/orders';
 
 /**
  * LipaPay posts the outcome of a unified order here (the NotifyUrl we set on
@@ -82,9 +82,10 @@ export async function POST(request) {
   try {
     // settlePayment is a no-op when the poll already recorded the outcome,
     // which is what makes repeated deliveries safe.
-    const { changed } = await settlePayment(outTradeNo, verified, {
-      failureReason: verified === 'SUCCESSFUL' ? null : (payload.PayMessage || verified),
-    });
+    const failureReason = verified === 'SUCCESSFUL' ? null : (payload.PayMessage || verified);
+    const { changed } = await settlePayment(outTradeNo, verified, { failureReason });
+    // The checkout poll may have settled it first, without the network's reason.
+    if (!changed && failureReason) await noteFailureReason(outTradeNo, failureReason);
     console.log('LipaPay callback settled:', { outTradeNo, verified, changed });
   } catch (dbError) {
     // Let it retry rather than losing the outcome.

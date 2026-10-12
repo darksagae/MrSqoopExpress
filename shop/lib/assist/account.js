@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { checkPaymentStatus, startMobileMoneyOrder } from '@/lib/checkout';
 import { getOrder, listOrdersForUser } from '@/lib/orders';
+import { explainFailure } from '@/lib/payments/failure';
 import { detectNetwork } from '@/lib/payments/networks';
 import { NETWORK_LABEL, resolveProvider } from '@/lib/payments/resolve';
 import { CartProblem, priceCart } from '@/lib/pricing';
@@ -215,7 +216,11 @@ export async function paymentStatus(account, { order_id }) {
     return { speech: `Payment received for order ${order.id}. Thank you! We'll let you know when it's on the way.`, data };
   }
   if (state === 'FAILED') {
-    return { speech: `The payment for order ${order.id} didn't go through. Ask me to order it again and I'll send a new request.`, data };
+    const why = explainFailure(order.network, order.failure_reason);
+    return {
+      speech: `The payment for order ${order.id} didn't go through. ${why ? why + ' ' : ''}Ask me to order it again and I'll send a new request.`,
+      data,
+    };
   }
   return {
     speech: `I'm still waiting for your approval on order ${order.id}. Check your phone for the Mobile Money prompt and enter your PIN.`,

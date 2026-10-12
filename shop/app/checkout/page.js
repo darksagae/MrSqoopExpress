@@ -47,6 +47,8 @@ export default function CheckoutPage() {
   // Provider outcome once the customer acts on the prompt: PENDING until they
   // approve, then SUCCESSFUL / FAILED / REJECTED, or TIMEOUT if we stop waiting.
   const [payStatus, setPayStatus] = useState(null);
+  // The network's reason when it turned the payment down, in plain words.
+  const [payReason, setPayReason] = useState(null);
 
   // Get the exact AliExpress price and Uganda shipping for the quantities in the
   // basket before the customer pays, so the total they see is the total charged.
@@ -142,6 +144,7 @@ export default function CheckoutPage() {
         const data = await res.json();
         if (cancelled) return;
         if (res.ok && data.settled) {
+          setPayReason(data.reason || null);
           setPayStatus(data.status);
           if (data.paid) clear();
           return;
@@ -267,6 +270,7 @@ export default function CheckoutPage() {
         {rejected && (
           <>
             <p>The payment was not completed, so your order hasn’t been placed.</p>
+            {payReason && <p>{payReason}</p>}
             <p className="co-muted">Nothing has been charged. You can try again from your cart.</p>
           </>
         )}

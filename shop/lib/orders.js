@@ -199,6 +199,21 @@ export async function settlePayment(paymentRef, status, { failureReason } = {}) 
   return { changed: false, order: await getOrderByRef(paymentRef) };
 }
 
+/**
+ * Keep the network's own reason for a failed payment when the status poll got
+ * there first and could only record a bare "FAILED". Never touches a paid order.
+ */
+export async function noteFailureReason(paymentRef, reason) {
+  if (!reason) return;
+  const sql = getSql();
+  await sql`
+    UPDATE orders SET failure_reason = ${reason}, updated_at = now()
+     WHERE payment_ref = ${paymentRef}
+       AND payment_status = 'FAILED'
+       AND (failure_reason IS NULL OR failure_reason IN ('FAILED', 'REJECTED'))
+  `;
+}
+
 /** Orders whose payment cleared and which an admin has not yet actioned. */
 export async function listAwaitingAdmin() {
   const sql = getSql();

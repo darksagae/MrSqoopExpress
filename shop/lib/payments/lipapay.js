@@ -260,6 +260,30 @@ export async function getPaymentStatus(outTradeNo) {
   return payStatusToString(json.Data?.PayStatus);
 }
 
+/**
+ * LipaPay's own record of an order, including PayMessage: the reason a payment
+ * failed ("user cancelled", "insufficient balance", "timeout", ...). For the
+ * admin check only; customers see our own wording.
+ */
+export async function orderDetails(outTradeNo) {
+  const { json } = await call('/api/pay/orderquery', {
+    Version: 'v1.0',
+    MchID: Number(MCH_ID),
+    TimeStamp: Math.floor(Date.now() / 1000),
+    OutTradeNo: outTradeNo,
+  });
+  if (!json.Succeeded) return { found: false, statusCode: json.StatusCode, errors: errorText(json.Errors) };
+  const d = json.Data || {};
+  return {
+    found: true,
+    status: payStatusToString(d.PayStatus),
+    message: d.PayMessage || null,
+    payTime: d.PayTime || null,
+    amountUGX: d.Amount != null ? Number(d.Amount) / 100 : null,
+    transactionId: d.TransactionId || null,
+  };
+}
+
 /** PayStatus enum → our status vocabulary. */
 export function payStatusToString(payStatus) {
   switch (Number(payStatus)) {

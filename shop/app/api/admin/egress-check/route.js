@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { isVoiceServerConfigured, voiceServerFetch } from '@/lib/assist/voice-server';
 import { egressFetch, isEgressConfigured } from '@/lib/egress';
-import { billEnquiry, isLipaPayConfigured } from '@/lib/payments/lipapay';
+import { billEnquiry, isLipaPayConfigured, orderDetails } from '@/lib/payments/lipapay';
 
 /**
  * GET /api/admin/egress-check?phone=07XXXXXXXX
@@ -16,6 +16,9 @@ import { billEnquiry, isLipaPayConfigured } from '@/lib/payments/lipapay';
  *
  * GET /api/admin/egress-check?voice=1 instead reports the voice server's
  * /health (it runs on the same Vultr server), since only Vercel can reach it.
+ *
+ * GET /api/admin/egress-check?order=MSE-001 (comma-separated for several)
+ * returns LipaPay's record of those orders, including why a payment failed.
  */
 function authorized(request) {
   const token = process.env.EGRESS_CHECK_TOKEN;
@@ -39,6 +42,19 @@ async function voiceHealth() {
 export async function GET(request) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (new URL(request.url).searchParams.get('voice')) return NextResponse.json(await voiceHealth());
+  const orders = new URL(request.url).searchParams.get('order');
+  if (orders) {
+    const ids = orders.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    const results = {};
+    for (const id of ids) {
+      try {
+        results[id] = await orderDetails(id);
+      } catch (e) {
+        results[id] = { error: e.message };
+      }
+    }
+    return NextResponse.json({ orders: results });
+  }
   if (!isEgressConfigured()) return NextResponse.json({ viaProxy: false, error: 'EGRESS_PROXY_* not set' });
 
   const phone = new URL(request.url).searchParams.get('phone');

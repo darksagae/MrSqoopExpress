@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { isVoiceServerConfigured, voiceServerFetch } from '@/lib/assist/voice-server';
 import { egressFetch, isEgressConfigured } from '@/lib/egress';
 import { billEnquiry, isLipaPayConfigured, orderDetails } from '@/lib/payments/lipapay';
+import { getOrder } from '@/lib/orders';
 
 /**
  * GET /api/admin/egress-check?phone=07XXXXXXXX
@@ -48,9 +49,26 @@ export async function GET(request) {
     const results = {};
     for (const id of ids) {
       try {
-        results[id] = await orderDetails(id);
+        results[id] = { lipapay: await orderDetails(id) };
       } catch (e) {
-        results[id] = { error: e.message };
+        results[id] = { lipapay: { error: e.message } };
+      }
+      // Our side: which network, when it was placed, and what we recorded.
+      try {
+        const o = await getOrder(id);
+        if (o) {
+          results[id].shop = {
+            network: o.network,
+            phone: String(o.customer_phone || '').replace(/\d(?=\d{3})/g, '•'),
+            amountUGX: Number(o.amount_ugx),
+            placedAt: o.created_at,
+            paymentStatus: o.payment_status,
+            failureReason: o.failure_reason,
+            paymentRef: o.payment_ref,
+          };
+        }
+      } catch (e) {
+        results[id].shop = { error: e.message };
       }
     }
     return NextResponse.json({ orders: results });

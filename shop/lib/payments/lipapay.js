@@ -279,7 +279,8 @@ export async function orderDetails(outTradeNo) {
     status: payStatusToString(d.PayStatus),
     message: d.PayMessage || null,
     payTime: d.PayTime || null,
-    amountUGX: d.Amount != null ? Number(d.Amount) / 100 : null,
+    // Requests send cents; LipaPay's order record reports whole shillings.
+    amountUGX: d.Amount != null ? Number(d.Amount) : null,
     transactionId: d.TransactionId || null,
   };
 }

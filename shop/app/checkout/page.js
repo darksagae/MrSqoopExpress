@@ -110,6 +110,11 @@ export default function CheckoutPage() {
   };
   // What the customer actually pays, after the promo.
   const payTotal = total - (promo?.discountUGX || 0);
+  // "3 items", or "3 items, 2 products" when one product is bought more than once.
+  const itemCount = items.reduce((n, c) => n + (Number(c.qty) || 0), 0);
+  const countLabel =
+    `${itemCount} ${itemCount === 1 ? 'item' : 'items'}` +
+    (items.length !== itemCount ? `, ${items.length} ${items.length === 1 ? 'product' : 'products'}` : '');
 
   // Start the name from the account, still editable (the payer may differ).
   useEffect(() => {
@@ -390,10 +395,12 @@ export default function CheckoutPage() {
 
         {/* Order summary */}
         <aside className="co-summary">
-          <h2 className="co-h2">Order summary</h2>
+          <h2 className="co-h2">
+            Order summary <span className="co-count">({countLabel})</span>
+          </h2>
           <div className="co-items">
             {items.map((c) => (
-              <div className="co-item" key={c.id}>
+              <div className="co-item" key={`${c.id}:${c.skuId}`}>
                 <img src={c.img} alt="" />
                 <div className="co-item-info">
                   <div className="co-item-name">{c.name}</div>
@@ -410,7 +417,7 @@ export default function CheckoutPage() {
               </div>
             ))}
           </div>
-          <div className="co-summary-row"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
+          <div className="co-summary-row"><span>Subtotal ({countLabel})</span><span>{fmt(subtotal)}</span></div>
           {/* AliExpress prices shipping per product, so this is the sum of the
               individual quotes rather than one flat delivery fee. */}
           <div className="co-summary-row">

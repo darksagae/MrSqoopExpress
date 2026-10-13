@@ -1313,6 +1313,7 @@ img { display: block; max-width: 100%; }
 .co-title { font-size: 28px; font-weight: 700; margin-bottom: 24px; }
 .co-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 32px; align-items: start; }
 .co-h2 { font-size: 15px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin: 4px 0 14px; color: #444; }
+.co-count { font-weight: 500; text-transform: none; letter-spacing: 0; color: #777; }
 .co-form { display: flex; flex-direction: column; }
 .co-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
 .co-field span { font-size: 13px; font-weight: 600; color: #333; }

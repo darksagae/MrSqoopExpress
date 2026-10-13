@@ -1,5 +1,3 @@
-import TrackingChoice from './TrackingChoice';
-
 export const metadata = {
   title: 'Privacy Policy',
   description: 'How Mr Sqoop Express collects, uses and protects your personal information when you shop and have orders delivered to Uganda.',
@@ -58,10 +56,9 @@ export default function PrivacyPolicy() {
         your delivery address.
       </p>
       <p>
-        You can say &quot;No thanks&quot; on the cookie notice, or turn ads tracking off here at any
-        time. It then stops on this device, including for purchases you make from it.
+        You can say &quot;No thanks&quot; on the cookie notice the first time you visit. Ads
+        tracking then stops on that device, including for purchases you make from it.
       </p>
-      <TrackingChoice />
 
       <h2>Data security</h2>
       <p>

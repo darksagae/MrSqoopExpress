@@ -53,7 +53,6 @@ export async function GET() {
         keyword,
         page: 1,
         pageSize: 5,
-        countryCode: 'UG',
         currency: 'USD',
         sort: 'orders_desc',
       })

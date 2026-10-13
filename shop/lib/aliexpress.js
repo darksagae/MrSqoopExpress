@@ -6,10 +6,10 @@ import {
   recordRefreshFailure,
   needsRefresh,
 } from './ali-tokens.js';
-// Catalogue and freight queries are quoted against the customer's country —
-// that is what the shopper is shown and charged. Where the goods are actually
-// routed is a separate, internal matter.
-import { CUSTOMER_DESTINATION } from './shipping-destination.js';
+// Catalogue and freight queries are asked for the warehouse, where the supplier
+// actually ships and bills (see shipping-destination.js). Customers are only
+// ever told about delivery to Uganda.
+import { SOURCING } from './shipping-destination.js';
 
 /**
  * AliExpress Dropshipping (DS) API client
@@ -282,7 +282,7 @@ export class AliExpressDS {
     keyword,
     page = 1,
     pageSize = 20,
-    countryCode = CUSTOMER_DESTINATION.countryCode,
+    countryCode = SOURCING.countryCode,
     currency = 'USD',
     locale = 'en_US',
     sort,
@@ -328,7 +328,7 @@ export class AliExpressDS {
     feedName,
     page = 1,
     pageSize = 20,
-    country = CUSTOMER_DESTINATION.countryCode,
+    country = SOURCING.countryCode,
     currency = 'USD',
     language = 'en',
     categoryId,
@@ -349,7 +349,7 @@ export class AliExpressDS {
   }
 
   /** Full product detail by id — returns a normalized detail object. */
-  async getProduct({ productId, countryCode = CUSTOMER_DESTINATION.countryCode, currency = 'USD', locale = 'en' }) {
+  async getProduct({ productId, countryCode = SOURCING.countryCode, currency = 'USD', locale = 'en' }) {
     const resp = await this.call('aliexpress.ds.product.get', {
       product_id: productId,
       ship_to_country: countryCode,
@@ -369,13 +369,13 @@ export class AliExpressDS {
     productId,
     skuId,
     quantity = 1,
-    country = CUSTOMER_DESTINATION.countryCode,
+    country = SOURCING.countryCode,
     currency = 'USD',
     locale = 'en_US',
     // Some destinations (the UAE among them) answer DELIVERY_SERVICE_EXCEPTION
     // unless the province and city are given as well.
-    provinceCode,
-    cityCode,
+    provinceCode = country === SOURCING.countryCode ? SOURCING.provinceCode : undefined,
+    cityCode = country === SOURCING.countryCode ? SOURCING.cityCode : undefined,
   }) {
     const req = {
       quantity,
@@ -415,8 +415,8 @@ export class AliExpressDS {
       throw err;
     }
 
-    // Prefer a free option; otherwise the cheapest paid option. The cost is shown
-    // to the customer as shipping to Uganda, exactly as AliExpress quoted it.
+    // Prefer a free option; otherwise the cheapest paid option. The cost is what
+    // the supplier bills to the warehouse; the customer sees it as shipping.
     const free = opts.find((o) => o.free_shipping) || null;
     const priced = opts
       .map((o) => ({ opt: o, cost: freightCostUSD(o) }))

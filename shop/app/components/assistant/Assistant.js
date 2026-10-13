@@ -303,7 +303,7 @@ export default function Assistant({ embedded = false }) {
                   <div><span>Shipping to Uganda</span><span>{m.detail.freeShipping ? 'Free' : m.detail.shippingUGX != null ? ugx(m.detail.shippingUGX) : 'At checkout'}</span></div>
                   <div className="sa-total"><span>Total, delivered</span><b>{ugx(m.detail.totalUGX)}</b></div>
                 </div>
-                {m.detail.minDays && m.detail.maxDays ? <div className="sa-pay">Delivery in about {m.detail.minDays}–{m.detail.maxDays} days</div> : null}
+                {m.detail.minDays && m.detail.maxDays ? <div className="sa-pay">Delivery to Uganda in {m.detail.minDays}–{m.detail.maxDays} working days</div> : null}
                 {m.detail.options?.length > 0 && (
                   <div className="sa-options">
                     {m.detail.options.map((o) => <span key={o}>{o}</span>)}

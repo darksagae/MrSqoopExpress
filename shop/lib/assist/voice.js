@@ -29,6 +29,6 @@ export function deliveryPhrase(s) {
   if (!s || !s.known) return 'delivery time will be confirmed at checkout';
   if (s.desc) return `it should arrive between ${s.desc.replace(/\./g, '').replace(/\s*-\s*/, ' and ')}`;
   return s.minDays === s.maxDays
-    ? `delivery takes about ${s.minDays} days`
-    : `delivery takes ${s.minDays} to ${s.maxDays} days`;
+    ? `delivery takes about ${s.minDays} working days`
+    : `delivery takes ${s.minDays} to ${s.maxDays} working days`;
 }

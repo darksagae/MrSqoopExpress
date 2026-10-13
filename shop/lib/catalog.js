@@ -1,14 +1,14 @@
 import { aliexpressDS } from './aliexpress.js';
 import { itemUGX, shipUGX } from './pricing.js';
-import { handlingFee } from './shipping-destination.js';
+import { DELIVERY_PROMISE, handlingFee } from './shipping-destination.js';
 import { mapPool, memoAsync } from './pool.js';
 import { shared } from './shared-cache.js';
 
 // AliExpress answers a freight quote in ~0.4s, so these run in parallel; this
 // is the most we will have in flight at once.
 const FREIGHT_CONCURRENCY = 6;
-// Shipping cost to Uganda for a given product option changes rarely. Charging
-// never relies on this copy: checkout re-quotes live in lib/pricing.js.
+// The shipping cost for a given product option changes rarely. Charging never
+// relies on this copy: checkout re-quotes live in lib/pricing.js.
 const FREIGHT_TTL_MS = 6 * 60 * 60 * 1000;
 // A slow freight lookup must not hold up the whole listing. Past this, the
 // product is returned with shipping unknown rather than not returned at all.
@@ -25,7 +25,8 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
  */
 const sharedFreight = shared(
   (productId, skuId) => aliexpressDS.queryFreight({ productId, skuId }),
-  'freight-ug-v1',
+  // Quotes are for the warehouse now; the name keeps the older Uganda quotes out.
+  'freight-ae-v1',
   FREIGHT_TTL_MS / 1000
 );
 
@@ -102,14 +103,13 @@ export function priceProducts(products, freights) {
         ? {
             known: shipUSD != null,
             deliverable: !refused,
-            reason: f.reason || null,
             free: Boolean(f.freeShipping),
             costUSD: shipUSD == null ? null : round2(shipUSD),
             costUGX: shipUSD == null ? null : shipUGX(shipUSD),
-            minDays: f.minDays,
-            maxDays: f.maxDays,
+            // The supplier's own days only cover the trip to the warehouse.
+            ...DELIVERY_PROMISE,
           }
-        : { known: false, deliverable: null, reason: null, free: false, costUSD: null, costUGX: null },
+        : { known: false, deliverable: null, free: false, costUSD: null, costUGX: null },
       // Everything the customer pays: product + shipping + handling. Null
       // while shipping is unknown rather than understating the total.
       totalUGX: shipUSD == null ? null : priceUGX + shipUGX(shipUSD) + handlingUGX,

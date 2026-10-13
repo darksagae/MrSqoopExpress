@@ -178,7 +178,7 @@ const OPTION_TTL_MS = 6 * 60 * 60 * 1000;
 // looked up again on every page and every cold start of this server.
 const sharedProduct = shared(
   (productId) => aliexpressDS.getProduct({ productId }),
-  'product-v1',
+  'product-ae-v1', // priced for the warehouse
   OPTION_TTL_MS / 1000
 );
 

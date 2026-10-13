@@ -410,7 +410,7 @@ export function createBrain({ signedIn = () => false, name = () => null, cart = 
     const ship = d.freeShipping ? 'free shipping' : d.shippingUGX != null ? `${ugx(d.shippingUGX)} shipping` : 'shipping';
     const stars = parseFloat(d.rating) > 0 ? ` Rated ${d.rating} stars${d.reviews > 0 ? ` from ${new Intl.NumberFormat('en-UG').format(d.reviews)} reviews` : ''}.` : '';
     const opts = d.options?.length ? ` Comes in ${d.options.slice(0, 5).join(', ')}${d.options.length > 5 ? ' and more' : ''}.` : '';
-    const when = d.minDays && d.maxDays ? ` Delivery takes about ${d.minDays} to ${d.maxDays} days.` : '';
+    const when = d.minDays && d.maxDays ? ` Delivery to Uganda takes ${d.minDays} to ${d.maxDays} working days.` : '';
     return {
       text: `${short(d.title, 6)}: ${ugx(d.totalUGX)} delivered to Uganda (item ${ugx(d.priceUGX)}, handling ${ugx(d.handlingUGX)}, ${ship}).${stars}${opts}${when}`,
       detail: mem.focus,

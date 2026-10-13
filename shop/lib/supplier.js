@@ -35,8 +35,8 @@ const view = (row) => ({
   orderIds: row.supplier_order_ids ? row.supplier_order_ids.split(',') : [],
   error: row.supplier_error || null,
   at: row.supplier_at || null,
-  // What the supplier charges to ship to the Dubai warehouse (not what the
-  // customer paid, which was quoted to Uganda).
+  // What the supplier charged to ship to the Dubai warehouse when the order was
+  // placed (the customer paid the same route's quote at checkout).
   dubaiShipUSD: row.supplier_ship_usd == null ? null : Number(row.supplier_ship_usd),
 });
 
@@ -82,9 +82,11 @@ async function buildItem(line) {
 }
 
 /**
- * Money for one order, side by side: what the customer paid us for shipping to
- * Uganda plus handling, against what the supplier charges to ship to Dubai.
- * What is left is the budget for the Dubai -> Uganda leg.
+ * Money for one order, side by side: what the customer paid us for shipping
+ * plus handling, against what the supplier charges to ship to Dubai now.
+ * Checkout quotes the same Dubai shipping, so what is left is the handling fee
+ * (give or take a change in the supplier's price since): the budget for the
+ * Dubai -> Uganda leg.
  */
 function moneyFor(order, dubaiShipUSD) {
   const items = Array.isArray(order.items) ? order.items : [];

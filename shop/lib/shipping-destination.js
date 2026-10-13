@@ -4,20 +4,19 @@ import { currentSettings } from './settings.js';
  * Two countries are involved in every order, and they answer different
  * questions.
  *
- * CUSTOMER_DESTINATION (Uganda) is what the shopper chooses and what every
- * price they see is quoted against: the product price and whether AliExpress
- * ships it to Uganda free or for a fee. This is the only country whose figures
- * appear anywhere customer-facing.
+ * CUSTOMER_DESTINATION (Uganda) is what the shopper is told: every page,
+ * message and order says delivery to Uganda. It is the only country a
+ * customer ever sees.
  *
- * WAREHOUSE (Deira, Dubai) is where goods are actually sent and collected from,
- * and delivery onward to Uganda is done by us. That routing — and the different
- * cost it carries — is internal. It never appears in a quote, a summary, or any
- * page a customer loads.
+ * WAREHOUSE (Dubai) is where the supplier actually ships and bills, and from
+ * where we take the goods on to Uganda. So it is also where every supplier
+ * figure is asked for (SOURCING): product prices, the shipping cost, and
+ * whether a product can be delivered at all. The customer pays exactly what
+ * the supplier will charge when the order is placed to the warehouse, so the
+ * two can't disagree. Our own leg on to Uganda is paid from the handling fee.
  *
- * Keeping the two apart matters in both directions: quoting the customer the
- * warehouse's numbers would show them the wrong country's prices, and ordering
- * against the customer's country would send the goods somewhere we don't
- * collect from.
+ * The warehouse's country, address and figures are internal. They never
+ * appear in a quote, a summary, or any page a customer loads.
  */
 export const CUSTOMER_DESTINATION = {
   countryCode: 'UG',
@@ -42,6 +41,24 @@ export const WAREHOUSE = {
 
 /** Operator-facing only — never render this to a customer. */
 export const WAREHOUSE_LABEL = '12 B Street, Al Zarooni, Dubai — United Arab Emirates';
+
+/**
+ * Where supplier prices, shipping quotes and availability are asked for: the
+ * warehouse. The UAE needs the province and city too, or the supplier refuses
+ * to quote shipping (DELIVERY_SERVICE_EXCEPTION).
+ */
+export const SOURCING = {
+  countryCode: WAREHOUSE.countryCode,
+  provinceCode: WAREHOUSE.province,
+  cityCode: WAREHOUSE.city,
+};
+
+/**
+ * The delivery time promised to customers, in working days, door to door in
+ * Uganda. The supplier's own estimate only covers the trip to the warehouse,
+ * so it is never shown.
+ */
+export const DELIVERY_PROMISE = { minDays: 7, maxDays: 15 };
 
 /**
  * Handling fee, charged as a percentage of the product price. The percentage is

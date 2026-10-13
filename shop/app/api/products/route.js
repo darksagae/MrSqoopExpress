@@ -5,6 +5,7 @@ import { attachSkus } from '@/lib/trending';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
+  SOURCING,
   handlingPercent,
 } from '@/lib/shipping-destination';
 import { loadSettings, currentSettings } from '@/lib/settings';
@@ -25,15 +26,15 @@ const MAX_PAGE_SIZE = 50;
 /**
  * GET /api/products?keyword=...&page=1&limit=20&shipping=0
  *
- * Real AliExpress products priced exactly as AliExpress prices them for Uganda,
- * each with its own shipping cost to Uganda and the handling fee shown as its
- * own separate charge.
+ * Real AliExpress products priced exactly as AliExpress charges them for our
+ * warehouse, each with its own shipping cost and the handling fee shown as its
+ * own separate charge. Customers are told it is all for delivery to Uganda.
  *
  * Shipping is reported per product rather than folded into the price because
  * AliExpress allocates it per product: some items ship to Uganda free and
  * others do not, and averaging that into one number would misprice both.
  *
- * Products no seller will ship to Uganda are dropped, not listed as
+ * Products no seller will ship to the warehouse are dropped, not listed as
  * unavailable — the shop only sells what it can actually deliver.
  */
 export async function GET(request) {
@@ -72,7 +73,7 @@ export async function GET(request) {
     // product is another freight quote.
     const fetchSize = dropUndeliverable ? Math.min(MAX_PAGE_SIZE, Math.ceil(limit * OVERFETCH)) : limit;
 
-    // Some categories (bulky goods, for example) lose most results to the Uganda
+    // Some categories (bulky goods, for example) lose most results to the
     // delivery filter, which left rows with two or three items. So one page the
     // shopper asks for can draw on up to PAGES_PER_REQUEST AliExpress pages,
     // stopping as soon as it has enough confirmed-deliverable products.
@@ -88,7 +89,7 @@ export async function GET(request) {
         keyword,
         page: firstSearchPage + i,
         pageSize: fetchSize,
-        countryCode: CUSTOMER_DESTINATION.countryCode,
+        countryCode: SOURCING.countryCode,
         currency: 'USD',
       });
       hasMore = batch.length > 0;
@@ -119,8 +120,8 @@ export async function GET(request) {
         }
         priced.push(...priceProducts(fresh, freights));
 
-        // Only products AliExpress has confirmed it will deliver to Uganda are
-        // listed. A shipping lookup that failed or timed out counts as not
+        // Only products AliExpress has confirmed it will deliver to the warehouse
+        // are listed. A shipping lookup that failed or timed out counts as not
         // confirmed: showing those let items through that turn out to be
         // undeliverable once opened.
         shown = dropUndeliverable ? priced.filter((p) => p.shipping.deliverable === true) : priced;

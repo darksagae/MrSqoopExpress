@@ -5,6 +5,7 @@ import { quoteFreightForAll } from '@/lib/catalog';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
+  DELIVERY_PROMISE,
   handlingFee,
   handlingPercent,
 } from '@/lib/shipping-destination';
@@ -15,10 +16,11 @@ const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 /**
  * GET /api/products/:id?skuId=...
  *
- * Full product detail with prices exactly as AliExpress lists them for Uganda,
- * the shipping cost to Uganda as its own figure, and the handling fee as
+ * Full product detail with prices exactly as the supplier charges them for our
+ * warehouse, the shipping cost as its own figure, and the handling fee as
  * another. Three separate numbers, because folding any of them together would
- * make the product price stop matching AliExpress.
+ * make the product price stop matching the supplier. Customers are told all of
+ * it is for delivery to Uganda; the warehouse is never mentioned.
  *
  * Shipping is quoted for a specific SKU because AliExpress prices it that way —
  * a heavier or bulkier variant of the same product can ship at a different
@@ -41,8 +43,8 @@ export async function GET(request, { params }) {
   try {
     const d = await aliexpressDS.getProduct({ productId: id });
 
-    // Shipping differs per option: one colour can be sent to Uganda while another
-    // is refused. So every option is quoted, and the ones AliExpress will not
+    // Shipping differs per option: one colour can be sent to the warehouse while
+    // another is refused. So every option is quoted, and the ones AliExpress will not
     // deliver are dropped — the shopper is only ever offered what can arrive.
     // (Quotes are cached, so switching options afterwards is instant.)
     const candidates = d.variants.slice(0, 24);
@@ -52,7 +54,8 @@ export async function GET(request, { params }) {
 
     if (candidates.length && !sellable.length) {
       return NextResponse.json(
-        { error: 'This product is not available for delivery to Uganda.', code: 'NOT_DELIVERABLE', reasons: [...new Set(quotes.map((q) => q?.reason).filter(Boolean))].slice(0, 3) },
+        // The supplier's own reasons name the warehouse's country, so they stay out.
+        { error: 'This product is not available for delivery to Uganda.', code: 'NOT_DELIVERABLE' },
         { status: 404 }
       );
     }
@@ -101,13 +104,12 @@ export async function GET(request, { params }) {
           quotedForSkuId: quoteSku || null,
           known: shipUSD != null,
           deliverable: freight ? freight.deliverable !== false : null,
-          reason: freight?.reason || null,
           free: Boolean(freight?.freeShipping),
           costUSD: shipUSD == null ? null : round2(shipUSD),
           costUGX: shipUSD == null ? null : shipUGX(shipUSD),
-          minDays: freight?.minDays ?? null,
-          maxDays: freight?.maxDays ?? null,
-          desc: freight?.deliveryDesc || d.deliveryDays || null,
+          // The supplier's estimate only covers the trip to the warehouse.
+          ...DELIVERY_PROMISE,
+          desc: null,
           destination: CUSTOMER_DESTINATION_LABEL,
         },
         destination: { ...CUSTOMER_DESTINATION, label: CUSTOMER_DESTINATION_LABEL },

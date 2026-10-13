@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { isAdminRequest, adminDenied } from '@/lib/admin-auth';
 import { aliexpressDS } from '@/lib/aliexpress';
-import { CUSTOMER_DESTINATION } from '@/lib/shipping-destination';
+import { SOURCING } from '@/lib/shipping-destination';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +19,8 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get('productId');
   const skuId = searchParams.get('skuId');
-  const country = searchParams.get('country') || CUSTOMER_DESTINATION.countryCode;
+  // The warehouse by default, which is what the shop quotes; ?country=UG etc. to compare.
+  const country = searchParams.get('country') || SOURCING.countryCode;
 
   if (!productId || !skuId) {
     return NextResponse.json({ error: 'productId and skuId are required' }, { status: 400 });
@@ -33,6 +34,7 @@ export async function GET(request) {
     language: 'en',
     currency: 'USD',
     locale: 'en_US',
+    ...(country === SOURCING.countryCode ? { provinceCode: SOURCING.provinceCode, cityCode: SOURCING.cityCode } : {}),
   };
 
   try {

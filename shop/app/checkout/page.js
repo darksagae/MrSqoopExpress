@@ -247,7 +247,7 @@ export default function CheckoutPage() {
       <div className="co-done">
         <div className="co-done-check">{paid ? '✓' : rejected ? '×' : '⏳'}</div>
         <h1>
-          {paid ? 'Payment Received' : rejected ? 'Payment Not Completed' : 'Waiting for Your Approval'}
+          {paid ? (done.test ? 'Test Order Placed' : 'Payment Received') : rejected ? 'Payment Not Completed' : 'Waiting for Your Approval'}
         </h1>
         <p className="co-order-id">Order {done.orderId}</p>
 
@@ -262,7 +262,11 @@ export default function CheckoutPage() {
 
         {paid && (
           <>
-            <p>Your payment is confirmed and your order is being prepared.</p>
+            <p>
+              {done.test
+                ? 'Test order: no payment was taken. It has gone to the admin for confirmation.'
+                : 'Your payment is confirmed and your order is being prepared.'}
+            </p>
             <p className="co-muted">Delivering to {CUSTOMER_DESTINATION_LABEL}.</p>
           </>
         )}

@@ -204,13 +204,13 @@ function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Prom
     setBusy(true)
     try {
       // Show what AliExpress charges to ship to Dubai next to what the customer
-      // paid for shipping to Uganda, before anything is ordered.
+      // paid (checkout quotes the same Dubai shipping), before anything is ordered.
       const q = await quoteSupplierOrder(order.id)
       const lines = q.lines.map((l) => `• ${l.qty} × ${l.name.slice(0, 40)}: ${l.shipUSD ? `US$${l.shipUSD.toFixed(2)}` : 'free'} (${l.service})`).join('\n')
       const ok = confirm(
         `Shipping to the Dubai warehouse:\n${lines}\n` +
           `Total to Dubai: US$${q.dubaiShipUSD.toFixed(2)} (${formatUgx(q.dubaiShipUGX)})\n\n` +
-          `Customer paid: shipping to Uganda ${formatUgx(q.paidShipUGX)} + handling ${formatUgx(q.paidHandlingUGX)}\n` +
+          `Customer paid: shipping ${formatUgx(q.paidShipUGX)} + handling ${formatUgx(q.paidHandlingUGX)}\n` +
           `Left for Dubai → Uganda: ${formatUgx(q.leftForUgandaLegUGX)}\n\n` +
           'Place this order on AliExpress now? You then pay it in the AliExpress account.',
       )
@@ -369,12 +369,19 @@ function PaymentAndItems({ order }: { order: Order }) {
     <div className="mt-3 space-y-3">
       {payment && (
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-neutral-500">
-          <span
-            className="rounded-full px-2.5 py-0.5 text-xs font-bold text-black"
-            style={{ backgroundColor: GOLD }}
-          >
-            PAID
-          </span>
+          {/* Test checkout records orders as paid without taking money (TEST- reference). */}
+          {payment.ref?.startsWith('TEST-') ? (
+            <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">
+              TEST ORDER · NOT PAID
+            </span>
+          ) : (
+            <span
+              className="rounded-full px-2.5 py-0.5 text-xs font-bold text-black"
+              style={{ backgroundColor: GOLD }}
+            >
+              PAID
+            </span>
+          )}
           <span className="text-neutral-300">{paymentLabel(payment.method)}</span>
           {payment.paidAt && <span>· {formatTimestamp(payment.paidAt)}</span>}
           {payment.ref && payment.method !== 'card' && (

@@ -186,6 +186,12 @@ export async function placeOrder(account, { confirmation }) {
     promoCode: c.c,
   });
   const b = result.body;
+  if (result.status === 200 && b.test) {
+    return {
+      speech: `Done. Your order ${b.orderId} is placed as a test order. No payment was taken, and it has gone to the admin for confirmation.`,
+      data: { orderId: b.orderId, network: b.network, amountUGX: b.amountUGX },
+    };
+  }
   if (result.status === 200) {
     return {
       speech:

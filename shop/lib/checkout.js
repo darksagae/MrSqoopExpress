@@ -1,5 +1,6 @@
 import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
-import { createOrder, newOrderId, attachPaymentRef, failUnsentOrder, settlePayment } from '@/lib/orders';
+import { createOrder, newOrderId, attachPaymentRef, failUnsentOrder, getOrderByRef, settlePayment } from '@/lib/orders';
+import { TEST_REF_PREFIX, isTestCheckout, isTestRef } from '@/lib/test-checkout';
 import { confirmCartTotal } from '@/lib/pricing';
 import { detectNetwork } from '@/lib/payments/networks';
 
@@ -46,9 +47,10 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
   }
 
   const { provider, ready, missing, label } = resolveProvider(network);
+  const test = isTestCheckout(account);
 
   // Not connected yet — be honest, don't fake a charge.
-  if (!ready) {
+  if (!ready && !test) {
     // The variable names identify our payment processor, so they stay in the
     // logs rather than going back to the browser.
     console.error(`[PAYMENTS] ${network} not configured. Missing: ${missing.join(', ')}`);
@@ -84,6 +86,33 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
   } catch (dbError) {
     console.error('[ORDER NOT PERSISTED]', orderId, dbError.message);
     return { status: 500, body: { error: 'We could not start your order. Nothing has been charged — please try again.' } };
+  }
+
+  // Test checkout (lib/test-checkout.js): no payment request at all. The order
+  // is marked paid under a TEST- reference and goes to the admin like any other.
+  if (test) {
+    const reference = `${TEST_REF_PREFIX}${orderId}`;
+    try {
+      await attachPaymentRef(orderId, reference);
+      await settlePayment(reference, 'SUCCESSFUL');
+    } catch (dbError) {
+      console.error('[TEST ORDER NOT SETTLED]', orderId, dbError.message);
+      return { status: 500, body: { error: 'We could not record the test order. Please try again.' } };
+    }
+    console.log('[TEST CHECKOUT] order recorded as paid without payment:', orderId, account?.email);
+    return {
+      status: 200,
+      body: {
+        success: true,
+        orderId,
+        status: 'pending',
+        network,
+        reference,
+        amountUGX,
+        test: true,
+        message: 'Test order: no payment was taken.',
+      },
+    };
   }
 
   let reference;
@@ -160,6 +189,14 @@ export async function checkPaymentStatus(network, reference) {
   }
   if (!reference) {
     return { status: 400, body: { error: 'reference is required' } };
+  }
+
+  // A test order is never sent to the provider; its outcome is our own record,
+  // and only test checkout can create a row with a TEST- reference.
+  if (isTestRef(reference)) {
+    const order = await getOrderByRef(reference).catch(() => null);
+    const paid = order?.payment_status === 'SUCCESSFUL';
+    return { status: 200, body: { reference, network, status: paid ? 'SUCCESSFUL' : 'PENDING', settled: paid, paid, test: true } };
   }
 
   const { provider, ready, label } = resolveProvider(network);

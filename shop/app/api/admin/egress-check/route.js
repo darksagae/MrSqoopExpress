@@ -4,6 +4,7 @@ import { isVoiceServerConfigured, voiceServerFetch } from '@/lib/assist/voice-se
 import { egressFetch, isEgressConfigured } from '@/lib/egress';
 import { accountSummary, billEnquiry, isLipaPayConfigured, orderDetails } from '@/lib/payments/lipapay';
 import { getOrder } from '@/lib/orders';
+import { aliexpressDS } from '@/lib/aliexpress';
 
 /**
  * GET /api/admin/egress-check?phone=07XXXXXXXX
@@ -108,11 +109,45 @@ async function orderFees(orderId) {
   return out;
 }
 
+/**
+ * Why the supplier won't quote an order's shipping to the warehouse: each line
+ * as stored, then the same freight lookup the admin's "Place order" makes,
+ * plus variations (no province/city, one unit), each answered raw.
+ */
+async function supplierFreight(orderId) {
+  const o = await getOrder(orderId);
+  if (!o) return { error: `No order ${orderId}` };
+  const items = Array.isArray(o.items) ? o.items : [];
+  const lines = [];
+  for (const line of items) {
+    const productId = String(line.id || '').split(':')[0];
+    const qty = Math.max(1, Number(line.qty) || 1);
+    const out = { productId, skuId: line.skuId || null, qty, paidShipUGX: line.shipUGX, tries: [] };
+    const variants = [
+      ['as placed: AE + Dubai/Dubai, full qty', { country: 'AE', provinceCode: 'Dubai', cityCode: 'Dubai', quantity: qty }],
+      ['AE + Dubai/Dubai, qty 1', { country: 'AE', provinceCode: 'Dubai', cityCode: 'Dubai', quantity: 1 }],
+      ['AE, no province/city', { country: 'AE', provinceCode: undefined, cityCode: undefined, quantity: qty }],
+    ];
+    for (const [label, args] of variants) {
+      try {
+        const f = await aliexpressDS.queryFreight({ productId, skuId: line.skuId, ...args });
+        out.tries.push({ label, ok: true, deliverable: f.deliverable, free: f.freeShipping, shipUSD: f.shippingCostUSD, service: f.serviceCode, reason: f.reason });
+      } catch (e) {
+        out.tries.push({ label, ok: false, code: e.code, error: e.message });
+      }
+    }
+    lines.push(out);
+  }
+  return { order: orderId, lines };
+}
+
 export async function GET(request) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (new URL(request.url).searchParams.get('voice')) return NextResponse.json(await voiceHealth());
   const formatsOf = new URL(request.url).searchParams.get('formats');
   if (formatsOf) return NextResponse.json(await numberFormats(formatsOf.trim()));
+  const supplierOf = new URL(request.url).searchParams.get('supplier');
+  if (supplierOf) return NextResponse.json(await supplierFreight(supplierOf.trim()));
   if (new URL(request.url).searchParams.get('account')) {
     // Today and the two days before, in LipaPay's yyyyMMdd form.
     const day = (offset) => new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10).replace(/-/g, '');

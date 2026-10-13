@@ -305,13 +305,6 @@ export function ShopSettings() {
                 </button>
               </div>
             )}
-            <p className="text-xs text-neutral-500">
-              Both come from Meta Events Manager → your pixel → Settings. With the Pixel ID set, the shop reports
-              visits, searches, product views, add to cart, checkout and purchases to Meta. The token lets the shop
-              also report each paid order from its own server, so a sale still counts when the customer approves
-              Mobile Money on their phone and never comes back to the page. Test orders are never reported. Leave
-              the Pixel ID empty to switch tracking off.
-            </p>
           </div>
 
           {message && (

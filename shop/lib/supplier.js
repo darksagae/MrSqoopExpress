@@ -40,6 +40,24 @@ const view = (row) => ({
   dubaiShipUSD: row.supplier_ship_usd == null ? null : Number(row.supplier_ship_usd),
 });
 
+// Pauses between freight lookups that the supplier answers as temporarily
+// unavailable: four tries over about ten seconds.
+const FREIGHT_WAITS_MS = [1500, 3000, 5000];
+
+// The admin previews an order and then places it, which asks the supplier the
+// same freight question twice within a minute. Reusing the first answer
+// avoids the second lookup, which is the one most likely to be refused.
+const QUOTE_TTL_MS = 10 * 60 * 1000;
+const quotes = new Map();
+function recentQuote(key) {
+  const q = quotes.get(key);
+  return q && Date.now() - q.at < QUOTE_TTL_MS ? q.freight : null;
+}
+function rememberQuote(key, freight) {
+  if (quotes.size > 200) quotes.clear();
+  quotes.set(key, { at: Date.now(), freight });
+}
+
 /** Work out exactly what to order for one line: product, option and delivery service. */
 async function buildItem(line) {
   const productId = String(line.id || '').split(':')[0];
@@ -58,18 +76,41 @@ async function buildItem(line) {
     provinceCode: WAREHOUSE.province,
     cityCode: WAREHOUSE.city,
   });
-  let freight;
-  for (let attempt = 0; ; attempt++) {
+  const name = line.name || productId;
+  const key = `${productId}:${variant.skuId}:${qty}`;
+  let freight = recentQuote(key);
+  for (let attempt = 0; !freight; attempt++) {
     try {
       freight = await ask();
-      break;
+      rememberQuote(key, freight);
     } catch (e) {
-      if (e.code !== 'FREIGHT_TEMPORARY' || attempt >= 2) throw e;
-      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      if (e.code !== 'FREIGHT_TEMPORARY') throw e;
+      // Even with the city given, the supplier answers a UAE lookup with a
+      // passing DELIVERY_SERVICE_EXCEPTION now and then, more often when the
+      // same product was just asked about (the preview, then the order). So
+      // wait longer between tries than a normal hiccup needs.
+      if (attempt < FREIGHT_WAITS_MS.length) {
+        await new Promise((r) => setTimeout(r, FREIGHT_WAITS_MS[attempt]));
+        continue;
+      }
+      // Still busy: use the route the supplier quoted for this very line at
+      // checkout, which is what the customer paid for.
+      if (line.shipService) {
+        freight = {
+          deliverable: true,
+          serviceCode: line.shipService,
+          company: line.shipService,
+          freeShipping: Number(line.shipUSD) === 0,
+          shippingCostUSD: Number(line.shipUSD) || 0,
+          fromCheckout: true,
+        };
+        break;
+      }
+      throw new Error(`"${name}": AliExpress's shipping lookup for the Dubai warehouse is busy (${e.message.replace(/^Freight temporarily unavailable: /, '')}). Please try again in a minute.`);
     }
   }
   if (!freight.deliverable || !freight.serviceCode) {
-    throw new Error(`"${line.name || productId}": the supplier will not ship this to the Dubai warehouse.`);
+    throw new Error(`"${name}": the supplier will not ship this to the Dubai warehouse.`);
   }
   const item = {
     product_id: Number(productId),
@@ -78,7 +119,8 @@ async function buildItem(line) {
   };
   if (variant.skuAttr) item.sku_attr = variant.skuAttr;
   const shipUSD = freight.freeShipping ? 0 : Number(freight.shippingCostUSD) || 0;
-  return { item, shipUSD, service: freight.company || freight.serviceCode };
+  const service = freight.company || freight.serviceCode;
+  return { item, shipUSD, service: freight.fromCheckout ? `${service}, as quoted at checkout` : service };
 }
 
 /**

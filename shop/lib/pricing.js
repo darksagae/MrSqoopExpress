@@ -23,15 +23,18 @@ const MAX_QTY = 50;
 /** A problem with the cart the shopper can fix; message is customer-safe. */
 export class CartProblem extends Error {}
 
-// AliExpress answers some freight calls with a passing DELIVERY_SERVICE_EXCEPTION.
-// At checkout that must not stop someone paying, so ask a few times.
+// AliExpress answers some freight calls with a passing DELIVERY_SERVICE_EXCEPTION,
+// and the UAE (where everything is quoted) more often than most. At checkout
+// that must not stop someone paying, so ask a few times, waiting a bit longer
+// each time.
+const FREIGHT_WAITS_MS = [500, 1200, 2500];
 async function freightWithRetry(args) {
   for (let attempt = 0; ; attempt++) {
     try {
       return await aliexpressDS.queryFreight(args);
     } catch (e) {
-      if (e.code !== 'FREIGHT_TEMPORARY' || attempt >= 2) throw e;
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      if (e.code !== 'FREIGHT_TEMPORARY' || attempt >= FREIGHT_WAITS_MS.length) throw e;
+      await new Promise((r) => setTimeout(r, FREIGHT_WAITS_MS[attempt]));
     }
   }
 }
@@ -85,6 +88,11 @@ async function priceLine(item) {
     // exact total AliExpress quoted for this quantity.
     shipUGX: Math.round(shipUGX(shipUSD) / qty),
     handlingUGX: handlingFee(price),
+    // The delivery service and US$ cost quoted for the whole line, kept so the
+    // supplier order can use the same route if the supplier's lookup is busy
+    // when the admin places it.
+    shipService: freight.serviceCode || null,
+    shipUSD: Math.round(shipUSD * 100) / 100,
   };
 }
 

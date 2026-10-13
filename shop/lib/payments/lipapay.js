@@ -184,11 +184,9 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
     // by 100x, sending the wrong way overcharges by 100x.
     Amount: amount * 100,
     TransactionType: 1, // collection
-    // LipaPay forwards TraderID to the network exactly as given. MTN prompts
-    // arrive with the 0-prefixed form, but every Airtel push sent that way was
-    // never created at Airtel ("Transaction not found"), so Airtel gets the
-    // 9-digit national form its own API uses. LipaPay accepts both.
-    TraderID: network === 'airtel' ? normalizeMsisdn(phone).slice(1) : normalizeMsisdn(phone),
+    // LipaPay converts this to whatever form the network wants (MTN receives
+    // 256XXXXXXXXX). Sending Airtel the 9-digit form made no difference.
+    TraderID: normalizeMsisdn(phone),
     // Customers routinely type a name that differs from the one registered on
     // their wallet. Matching on it would reject legitimate payments, so skip it.
     TraderFullName: 'NONEEDMATCHNAMES',

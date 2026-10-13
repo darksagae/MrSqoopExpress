@@ -23,6 +23,9 @@ import { getOrder } from '@/lib/orders';
  *
  * GET /api/admin/egress-check?formats=MSE-009 runs no-charge bill enquiries on
  * that order's number in each format, to see which ones LipaPay accepts.
+ *
+ * GET /api/admin/egress-check?fees=MSE-013,MSE-015 shows the amount and
+ * charges LipaPay would put to each order's wallet (bill enquiry, no charge).
  */
 function authorized(request) {
   const token = process.env.EGRESS_CHECK_TOKEN;
@@ -80,11 +83,40 @@ async function numberFormats(orderId) {
   return { order: orderId, network: o.network, tries };
 }
 
+/**
+ * What LipaPay would ask the customer's wallet for on an order: its amount and
+ * charges from a no-charge bill enquiry on the order's own number and total.
+ * Account-holder names are left out of the reply.
+ */
+async function orderFees(orderId) {
+  const o = await getOrder(orderId);
+  if (!o) return { error: `No order ${orderId}` };
+  const channel = { mtn: 1, airtel: 2 }[o.network];
+  const out = { network: o.network, amountUGX: Number(o.amount_ugx), tries: [] };
+  for (const ch of [channel, 0]) {
+    try {
+      const r = await billEnquiry({ phone: o.customer_phone, amountUGX: Number(o.amount_ugx), channel: ch });
+      const { GivenName, FamilyName, FullName, Sign, TraderID, ...money } = r.data || {};
+      out.tries.push({ channel: ch, ok: r.ok, statusCode: r.statusCode, errors: r.errors, ...money });
+    } catch (e) {
+      out.tries.push({ channel: ch, error: e.message });
+    }
+  }
+  return out;
+}
+
 export async function GET(request) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (new URL(request.url).searchParams.get('voice')) return NextResponse.json(await voiceHealth());
   const formatsOf = new URL(request.url).searchParams.get('formats');
   if (formatsOf) return NextResponse.json(await numberFormats(formatsOf.trim()));
+  const feesOf = new URL(request.url).searchParams.get('fees');
+  if (feesOf) {
+    const ids = feesOf.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);
+    const results = {};
+    for (const id of ids) results[id] = await orderFees(id);
+    return NextResponse.json({ fees: results });
+  }
   const orders = new URL(request.url).searchParams.get('order');
   if (orders) {
     const ids = orders.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 20);

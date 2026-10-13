@@ -288,6 +288,22 @@ export async function orderDetails(outTradeNo) {
   };
 }
 
+/**
+ * The merchant account's balance and its transactions for a date range
+ * (yyyyMMdd, at most 3 days). Read-only; for the admin check.
+ */
+export async function accountSummary({ startDay, endDay }) {
+  const stamp = () => Math.floor(Date.now() / 1000);
+  const bal = await call('/api/pay/balance', { Version: 'v1.0', MchID: Number(MCH_ID), TimeStamp: stamp() });
+  const stmt = await call('/api/pay/statement', {
+    Version: 'v1.0', MchID: Number(MCH_ID), TimeStamp: stamp(), StartTime: startDay, EndTime: endDay,
+  });
+  return {
+    balance: bal.json.Succeeded ? bal.json.Data?.Balance : { error: errorText(bal.json.Errors) },
+    items: stmt.json.Succeeded ? stmt.json.Data?.Items || [] : { error: errorText(stmt.json.Errors) },
+  };
+}
+
 /** PayStatus enum → our status vocabulary. */
 export function payStatusToString(payStatus) {
   switch (Number(payStatus)) {

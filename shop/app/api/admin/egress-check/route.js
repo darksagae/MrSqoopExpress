@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { isVoiceServerConfigured, voiceServerFetch } from '@/lib/assist/voice-server';
 import { egressFetch, isEgressConfigured } from '@/lib/egress';
-import { billEnquiry, isLipaPayConfigured, orderDetails } from '@/lib/payments/lipapay';
+import { accountSummary, billEnquiry, isLipaPayConfigured, orderDetails } from '@/lib/payments/lipapay';
 import { getOrder } from '@/lib/orders';
 
 /**
@@ -26,6 +26,9 @@ import { getOrder } from '@/lib/orders';
  *
  * GET /api/admin/egress-check?fees=MSE-013,MSE-015 shows the amount and
  * charges LipaPay would put to each order's wallet (bill enquiry, no charge).
+ *
+ * GET /api/admin/egress-check?account=1 shows the merchant balance and the
+ * last three days of transactions as LipaPay recorded them.
  */
 function authorized(request) {
   const token = process.env.EGRESS_CHECK_TOKEN;
@@ -110,6 +113,19 @@ export async function GET(request) {
   if (new URL(request.url).searchParams.get('voice')) return NextResponse.json(await voiceHealth());
   const formatsOf = new URL(request.url).searchParams.get('formats');
   if (formatsOf) return NextResponse.json(await numberFormats(formatsOf.trim()));
+  if (new URL(request.url).searchParams.get('account')) {
+    // Today and the two days before, in LipaPay's yyyyMMdd form.
+    const day = (offset) => new Date(Date.now() - offset * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+    try {
+      const a = await accountSummary({ startDay: day(2), endDay: day(0) });
+      // Network replies quote the payer's full number; keep only its last digits.
+      const masked = JSON.parse(JSON.stringify(a).replace(/\d{5,}(\d{3})(?=\D|$)/g, (m, end) =>
+        /^(256|0)?7\d{8}$/.test(m) ? '•••' + end : m));
+      return NextResponse.json({ account: masked });
+    } catch (e) {
+      return NextResponse.json({ account: { error: e.message } });
+    }
+  }
   const feesOf = new URL(request.url).searchParams.get('fees');
   if (feesOf) {
     const ids = feesOf.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 6);

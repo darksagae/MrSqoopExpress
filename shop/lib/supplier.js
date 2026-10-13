@@ -106,7 +106,8 @@ async function buildItem(line) {
         };
         break;
       }
-      throw new Error(`"${name}": AliExpress's shipping lookup for the Dubai warehouse is busy (${e.message.replace(/^Freight temporarily unavailable: /, '')}). Please try again in a minute.`);
+      console.warn('[supplier] freight lookup still busy for', name, e.message);
+      throw new Error(`"${name}": AliExpress didn't answer about shipping to the Dubai warehouse. Please try again in a minute.`);
     }
   }
   if (!freight.deliverable || !freight.serviceCode) {

@@ -3,6 +3,7 @@ import { Logo } from './Logo'
 import { AdminLogin } from './AdminLogin'
 import { ResetPassword } from './ResetPassword'
 import { ShopSettings } from './ShopSettings'
+import { ConfirmDialog, plainError } from './ConfirmDialog'
 import { adminLogout, isAdminLoggedIn } from '../lib/adminAuth'
 import {
   advanceOrder,
@@ -14,6 +15,7 @@ import {
   quoteSupplierOrder,
   reviewOrder,
   updateOrderBilling,
+  type SupplierQuote,
 } from '../lib/ordersApi'
 import {
   filterOrdersByCategory,
@@ -189,36 +191,54 @@ const REVIEW_BADGE = {
   cancelled: { label: 'CANCELLED', className: 'bg-red-500 text-white' },
 } as const
 
-const REVIEW_PROMPTS: Record<ReviewAction, string> = {
-  confirm: 'Confirm this order? The customer will see it move to "Order Processing".',
+const REVIEW_TITLES: Record<ReviewAction, string> = {
+  confirm: 'Confirm this order?',
   hold: 'Put this order on hold?',
-  cancel: 'Cancel this order? The customer has already paid, so you must refund them in LipaPay or Absa.',
+  cancel: 'Cancel this order?',
+}
+
+const REVIEW_PROMPTS: Record<ReviewAction, string> = {
+  confirm: 'The customer will see it move to "Order Processing".',
+  hold: 'It stays here until you confirm or cancel it.',
+  cancel: 'The customer has already paid, so you must refund them in LipaPay or Absa.',
+}
+
+const REVIEW_BUTTONS: Record<ReviewAction, string> = {
+  confirm: 'Confirm order',
+  hold: 'Put on hold',
+  cancel: 'Cancel order',
 }
 
 /** After confirming: place the order with the supplier, then pay it there. */
 function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
+  const [quote, setQuote] = useState<SupplierQuote | null>(null)
+  const [error, setError] = useState('')
   const supplier = order.supplier
+
+  // Show what AliExpress charges to ship to Dubai next to what the customer
+  // paid (checkout quotes the same Dubai shipping), before anything is ordered.
+  const preview = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      setQuote(await quoteSupplierOrder(order.id))
+    } catch (e) {
+      setError(plainError(e, 'Could not get the shipping cost. Please try again.'))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const place = async () => {
     setBusy(true)
+    setError('')
     try {
-      // Show what AliExpress charges to ship to Dubai next to what the customer
-      // paid (checkout quotes the same Dubai shipping), before anything is ordered.
-      const q = await quoteSupplierOrder(order.id)
-      const lines = q.lines.map((l) => `• ${l.qty} × ${l.name.slice(0, 40)}: ${l.shipUSD ? `US$${l.shipUSD.toFixed(2)}` : 'free'} (${l.service})`).join('\n')
-      const ok = confirm(
-        `Shipping to the Dubai warehouse:\n${lines}\n` +
-          `Total to Dubai: US$${q.dubaiShipUSD.toFixed(2)} (${formatUgx(q.dubaiShipUGX)})\n\n` +
-          `Customer paid: shipping ${formatUgx(q.paidShipUGX)} + handling ${formatUgx(q.paidHandlingUGX)}\n` +
-          `Left for Dubai → Uganda: ${formatUgx(q.leftForUgandaLegUGX)}\n\n` +
-          'Place this order on AliExpress now? You then pay it in the AliExpress account.',
-      )
-      if (!ok) return
       await placeSupplierOrder(order.id)
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Could not place the order. Try again.')
+    } catch (e) {
+      setError(plainError(e, 'Could not place the order. Please try again.'))
     } finally {
+      setQuote(null)
       await onUpdate()
       setBusy(false)
     }
@@ -255,8 +275,14 @@ function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Prom
 
   return (
     <div className="mt-2 text-sm text-neutral-400">
-      {supplier?.status === 'failed' && (
-        <p className="mb-2 text-red-300">Last attempt failed: {supplier.error || 'unknown error'}</p>
+      {error ? (
+        <p className="mb-2 text-red-300">{error}</p>
+      ) : (
+        supplier?.status === 'failed' && (
+          <p className="mb-2 text-red-300">
+            Last attempt didn’t go through: {plainError(supplier.error, 'please try again.')}
+          </p>
+        )
       )}
       {supplier?.status === 'placing' ? (
         <p>Placing the order with AliExpress… refresh in a moment.</p>
@@ -266,14 +292,58 @@ function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Prom
           <button
             type="button"
             disabled={busy}
-            onClick={() => void place()}
+            onClick={() => void preview()}
             className="mt-3 rounded-full px-4 py-2 text-sm font-bold text-black disabled:opacity-60"
             style={{ backgroundColor: GOLD }}
           >
-            {busy ? 'Placing…' : supplier?.status === 'failed' ? 'Try placing again' : 'Place order on AliExpress'}
+            {busy && !quote ? 'Getting shipping cost…' : supplier?.status === 'failed' ? 'Try placing again' : 'Place order on AliExpress'}
           </button>
           <p className="mt-2 text-xs text-neutral-500">Or buy it by hand using the links below.</p>
         </>
+      )}
+
+      {quote && (
+        <ConfirmDialog
+          title="Place this order on AliExpress?"
+          confirmLabel="Place order"
+          busy={busy}
+          onConfirm={() => void place()}
+          onCancel={() => setQuote(null)}
+        >
+          <p className="font-semibold text-neutral-200">Shipping to the Dubai warehouse</p>
+          <ul className="mt-2 space-y-1">
+            {quote.lines.map((line, index) => (
+              <li key={index} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">
+                  {line.qty} × {line.name}
+                  <span className="block text-xs text-neutral-500">{line.service}</span>
+                </span>
+                <span className="shrink-0">{line.shipUSD ? `US$${line.shipUSD.toFixed(2)}` : 'Free'}</span>
+              </li>
+            ))}
+          </ul>
+          <dl className="mt-3 space-y-1 border-t border-neutral-800 pt-3">
+            <div className="flex justify-between">
+              <dt>Total to Dubai</dt>
+              <dd>
+                US${quote.dubaiShipUSD.toFixed(2)} ({formatUgx(quote.dubaiShipUGX)})
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Customer paid for shipping</dt>
+              <dd>{formatUgx(quote.paidShipUGX)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Customer paid for handling</dt>
+              <dd>{formatUgx(quote.paidHandlingUGX)}</dd>
+            </div>
+            <div className="flex justify-between font-semibold text-neutral-100">
+              <dt>Left for Dubai to Uganda</dt>
+              <dd>{formatUgx(quote.leftForUgandaLegUGX)}</dd>
+            </div>
+          </dl>
+          <p className="mt-3 text-xs text-neutral-500">You then pay it in the AliExpress account.</p>
+        </ConfirmDialog>
       )}
     </div>
   )
@@ -281,18 +351,21 @@ function SupplierPanel({ order, onUpdate }: { order: Order; onUpdate: () => Prom
 
 function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
+  const [asking, setAsking] = useState<ReviewAction | null>(null)
+  const [error, setError] = useState('')
   const review = order.review
   if (!review) return null
 
-  const act = async (action: ReviewAction) => {
-    if (!confirm(REVIEW_PROMPTS[action])) return
-    const note = action === 'confirm' ? undefined : prompt('Reason (optional):') ?? undefined
+  const act = async (action: ReviewAction, note?: string) => {
     setBusy(true)
+    setError('')
     try {
       await reviewOrder(order.id, action, note)
+      setAsking(null)
       await onUpdate()
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Could not update this order. Try again.')
+    } catch (e) {
+      setAsking(null)
+      setError(plainError(e, 'Could not update this order. Please try again.'))
     } finally {
       setBusy(false)
     }
@@ -321,12 +394,29 @@ function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promis
         <p className="mt-2 text-sm text-red-300">Refund the customer in LipaPay or Absa if you haven’t already.</p>
       )}
 
+      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
+
+      {asking && (
+        <ConfirmDialog
+          title={REVIEW_TITLES[asking]}
+          confirmLabel={REVIEW_BUTTONS[asking]}
+          cancelLabel="Back"
+          danger={asking === 'cancel'}
+          withNote={asking !== 'confirm'}
+          busy={busy}
+          onConfirm={(note) => void act(asking, note)}
+          onCancel={() => setAsking(null)}
+        >
+          <p>{REVIEW_PROMPTS[asking]}</p>
+        </ConfirmDialog>
+      )}
+
       {open && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={busy}
-            onClick={() => void act('confirm')}
+            onClick={() => setAsking('confirm')}
             className="rounded-full px-4 py-2 text-sm font-bold text-black disabled:opacity-60"
             style={{ backgroundColor: GOLD }}
           >
@@ -336,7 +426,7 @@ function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promis
             <button
               type="button"
               disabled={busy}
-              onClick={() => void act('hold')}
+              onClick={() => setAsking('hold')}
               className="rounded-full border border-neutral-600 px-4 py-2 text-sm text-neutral-200 disabled:opacity-60"
             >
               Hold
@@ -345,7 +435,7 @@ function ReviewPanel({ order, onUpdate }: { order: Order; onUpdate: () => Promis
           <button
             type="button"
             disabled={busy}
-            onClick={() => void act('cancel')}
+            onClick={() => setAsking('cancel')}
             className="rounded-full border border-red-700 px-4 py-2 text-sm text-red-300 disabled:opacity-60"
           >
             Cancel
@@ -473,6 +563,8 @@ function OrderRow({
   onUpdate: () => Promise<void>
 }) {
   const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const stageLabel = TRACKING_STAGES[order.currentStageIndex]
   const canAdvance = order.currentStageIndex < TRACKING_STAGES.length - 1
 
@@ -522,23 +614,41 @@ function OrderRow({
         <button
           type="button"
           disabled={busy}
-          onClick={async () => {
-            if (!confirm('Delete this order?')) return
-            setBusy(true)
-            try {
-              await deleteOrder(order.id)
-              await onUpdate()
-            } catch {
-              alert('Could not delete this order. Try again.')
-            } finally {
-              setBusy(false)
-            }
+          onClick={() => {
+            setDeleteError('')
+            setConfirmDelete(true)
           }}
           className="rounded-full border border-neutral-700 px-4 py-2 text-sm text-neutral-300 disabled:opacity-60"
         >
           Delete
         </button>
       </div>
+      {deleteError && <p className="mt-2 text-sm text-red-300">{deleteError}</p>}
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Delete this order?"
+          confirmLabel="Delete order"
+          danger
+          busy={busy}
+          onConfirm={async () => {
+            setBusy(true)
+            try {
+              await deleteOrder(order.id)
+              setConfirmDelete(false)
+              await onUpdate()
+            } catch {
+              setConfirmDelete(false)
+              setDeleteError('Could not delete this order. Please try again.')
+            } finally {
+              setBusy(false)
+            }
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        >
+          <p>This can’t be undone.</p>
+        </ConfirmDialog>
+      )}
 
       <details className="mt-4">
         <summary className="cursor-pointer text-sm text-neutral-400">Status history</summary>

@@ -6,7 +6,9 @@ import { SOURCING } from '@/lib/shipping-destination';
 export const dynamic = 'force-dynamic';
 
 /**
- * GET /api/admin/aliexpress/freight-debug?productId=...&skuId=...&country=AE
+ * GET /api/admin/aliexpress/freight-debug?productId=...&skuId=...
+ *
+ * Always for the Dubai warehouse, like every other supplier query.
  *
  * Raw freight response, unparsed. Exists because "shipping unknown" has several
  * very different causes — an API error, an empty option list, or a response
@@ -19,8 +21,6 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get('productId');
   const skuId = searchParams.get('skuId');
-  // The warehouse by default, which is what the shop quotes; ?country=UG etc. to compare.
-  const country = searchParams.get('country') || SOURCING.countryCode;
 
   if (!productId || !skuId) {
     return NextResponse.json({ error: 'productId and skuId are required' }, { status: 400 });
@@ -28,13 +28,14 @@ export async function GET(request) {
 
   const req = {
     quantity: 1,
-    shipToCountry: country,
+    shipToCountry: SOURCING.countryCode,
+    provinceCode: SOURCING.provinceCode,
+    cityCode: SOURCING.cityCode,
     productId: String(productId),
     selectedSkuId: String(skuId),
     language: 'en',
     currency: 'USD',
     locale: 'en_US',
-    ...(country === SOURCING.countryCode ? { provinceCode: SOURCING.provinceCode, cityCode: SOURCING.cityCode } : {}),
   };
 
   try {
@@ -42,7 +43,7 @@ export async function GET(request) {
       locale: 'en_US',
       queryDeliveryReq: JSON.stringify(req),
     });
-    const parsed = await aliexpressDS.queryFreight({ productId, skuId, country });
+    const parsed = await aliexpressDS.queryFreight({ productId, skuId });
     return NextResponse.json({ request: req, parsed, raw });
   } catch (error) {
     return NextResponse.json(

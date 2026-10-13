@@ -6,9 +6,12 @@ import {
   recordRefreshFailure,
   needsRefresh,
 } from './ali-tokens.js';
-// Catalogue and freight queries are asked for the warehouse, where the supplier
-// actually ships and bills (see shipping-destination.js). Customers are only
-// ever told about delivery to Uganda.
+// Only ever the warehouse: every catalogue, product and freight query is asked
+// for the Dubai warehouse, where the supplier actually ships and bills (see
+// shipping-destination.js), and none of them takes a country from the caller.
+// A product is only sold, and only charged for, if it can go to the warehouse,
+// so nothing is ever sold that then can't be ordered and has to be refunded.
+// Customers are only ever told about delivery to Uganda.
 import { SOURCING } from './shipping-destination.js';
 
 /**
@@ -282,7 +285,6 @@ export class AliExpressDS {
     keyword,
     page = 1,
     pageSize = 20,
-    countryCode = SOURCING.countryCode,
     currency = 'USD',
     locale = 'en_US',
     sort,
@@ -291,7 +293,8 @@ export class AliExpressDS {
       keyWord: keyword,
       pageIndex: page,
       pageSize,
-      countryCode,
+      // Always the warehouse: see "Only ever the warehouse" below.
+      countryCode: SOURCING.countryCode,
       currency,
       local: locale,
       ...(sort ? { sort } : {}),
@@ -328,7 +331,6 @@ export class AliExpressDS {
     feedName,
     page = 1,
     pageSize = 20,
-    country = SOURCING.countryCode,
     currency = 'USD',
     language = 'en',
     categoryId,
@@ -338,8 +340,8 @@ export class AliExpressDS {
       feed_name: feedName,
       page_no: page,
       page_size: pageSize,
-      country,
-      ship_to_country: country,
+      country: SOURCING.countryCode,
+      ship_to_country: SOURCING.countryCode,
       target_currency: currency,
       target_language: language,
       ...(categoryId ? { category_id: categoryId } : {}),
@@ -349,10 +351,10 @@ export class AliExpressDS {
   }
 
   /** Full product detail by id — returns a normalized detail object. */
-  async getProduct({ productId, countryCode = SOURCING.countryCode, currency = 'USD', locale = 'en' }) {
+  async getProduct({ productId, currency = 'USD', locale = 'en' }) {
     const resp = await this.call('aliexpress.ds.product.get', {
       product_id: productId,
-      ship_to_country: countryCode,
+      ship_to_country: SOURCING.countryCode,
       target_currency: currency,
       target_language: locale,
     });
@@ -362,32 +364,29 @@ export class AliExpressDS {
   }
 
   /**
-   * Shipping options for a product+sku to a country. Tells us whether the
+   * Shipping options for a product+sku to the warehouse. Tells us whether the
    * product qualifies for FREE shipping (AliExpress Choice / Selection).
    */
   async queryFreight({
     productId,
     skuId,
     quantity = 1,
-    country = SOURCING.countryCode,
     currency = 'USD',
     locale = 'en_US',
-    // Some destinations (the UAE among them) answer DELIVERY_SERVICE_EXCEPTION
-    // unless the province and city are given as well.
-    provinceCode = country === SOURCING.countryCode ? SOURCING.provinceCode : undefined,
-    cityCode = country === SOURCING.countryCode ? SOURCING.cityCode : undefined,
   }) {
     const req = {
       quantity,
-      shipToCountry: country,
+      shipToCountry: SOURCING.countryCode,
+      // The UAE answers DELIVERY_SERVICE_EXCEPTION unless the province and
+      // city are given as well.
+      provinceCode: SOURCING.provinceCode,
+      cityCode: SOURCING.cityCode,
       productId: String(productId),
       selectedSkuId: String(skuId),
       language: 'en',
       currency,
       locale,
     };
-    if (provinceCode) req.provinceCode = provinceCode;
-    if (cityCode) req.cityCode = cityCode;
     const resp = await this.call('aliexpress.ds.freight.query', {
       locale,
       queryDeliveryReq: JSON.stringify(req),

@@ -66,16 +66,8 @@ async function buildItem(line) {
   const variant = product.variants.find((v) => v.skuId === String(line.skuId)) || null;
   if (!variant) throw new Error(`"${line.name || productId}": the option bought is no longer available from the supplier.`);
 
-  // The warehouse's province and city must be included: for the UAE the
-  // supplier refuses to quote (DELIVERY_SERVICE_EXCEPTION) without them.
-  const ask = () => aliexpressDS.queryFreight({
-    productId,
-    skuId: variant.skuId,
-    quantity: qty,
-    country: WAREHOUSE.countryCode,
-    provinceCode: WAREHOUSE.province,
-    cityCode: WAREHOUSE.city,
-  });
+  // Always quoted to the warehouse (Dubai), with its province and city.
+  const ask = () => aliexpressDS.queryFreight({ productId, skuId: variant.skuId, quantity: qty });
   const name = line.name || productId;
   const key = `${productId}:${variant.skuId}:${qty}`;
   let freight = recentQuote(key);

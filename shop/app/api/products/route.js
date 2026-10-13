@@ -5,7 +5,6 @@ import { attachSkus } from '@/lib/trending';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
-  SOURCING,
   handlingPercent,
 } from '@/lib/shipping-destination';
 import { loadSettings, currentSettings } from '@/lib/settings';
@@ -89,7 +88,6 @@ export async function GET(request) {
         keyword,
         page: firstSearchPage + i,
         pageSize: fetchSize,
-        countryCode: SOURCING.countryCode,
         currency: 'USD',
       });
       hasMore = batch.length > 0;

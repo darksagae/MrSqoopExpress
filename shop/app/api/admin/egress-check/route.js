@@ -112,7 +112,7 @@ async function orderFees(orderId) {
 /**
  * Why the supplier won't quote an order's shipping to the warehouse: each line
  * as stored, then the same freight lookup the admin's "Place order" makes,
- * plus variations (no province/city, one unit), each answered raw.
+ * and the same for one unit, each answered raw.
  */
 async function supplierFreight(orderId) {
   const o = await getOrder(orderId);
@@ -123,10 +123,10 @@ async function supplierFreight(orderId) {
     const productId = String(line.id || '').split(':')[0];
     const qty = Math.max(1, Number(line.qty) || 1);
     const out = { productId, skuId: line.skuId || null, qty, paidShipUGX: line.shipUGX, tries: [] };
+    // The supplier client only ever asks about the warehouse (AE, Dubai/Dubai).
     const variants = [
-      ['as placed: AE + Dubai/Dubai, full qty', { country: 'AE', provinceCode: 'Dubai', cityCode: 'Dubai', quantity: qty }],
-      ['AE + Dubai/Dubai, qty 1', { country: 'AE', provinceCode: 'Dubai', cityCode: 'Dubai', quantity: 1 }],
-      ['AE, no province/city', { country: 'AE', provinceCode: undefined, cityCode: undefined, quantity: qty }],
+      ['as placed: full qty', { quantity: qty }],
+      ['one unit', { quantity: 1 }],
     ];
     for (const [label, args] of variants) {
       try {

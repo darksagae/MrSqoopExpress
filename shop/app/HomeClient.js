@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useCart } from './cart';
+import { track } from '@/lib/meta-pixel';
 import { CATEGORIES } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
 import PromoBanner from './components/PromoBanner';
@@ -429,6 +430,7 @@ export default function HomeClient({ initial = null }) {
   const runSearch = (q) => {
     const clean = q.trim();
     if (clean) remember(clean);
+    if (clean) track('Search', { search_string: clean });
     setKeyword(clean);
     setFocused(false);
     scrollRestored.current = true; // a new search starts at the top

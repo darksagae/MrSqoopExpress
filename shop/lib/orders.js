@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { getSql } from './db.js';
 import { syncOrderToTracking } from './tracking.js';
 import { sendOrderConfirmation, isEmailConfigured } from './email.js';
+import { sendPurchaseToMeta } from './meta-capi.js';
 
 /**
  * Order persistence.
@@ -63,6 +64,8 @@ export function ensureAccountColumns() {
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS promo_code TEXT`;
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ`;
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_ugx BIGINT NOT NULL DEFAULT 0`;
+        // Meta ads matching for the order (cookies, address, browser); see lib/meta-capi.js.
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking JSONB`;
         await sql`CREATE INDEX IF NOT EXISTS orders_user_idx ON orders (user_id, created_at DESC) WHERE user_id IS NOT NULL`;
         return true;
       } catch (e) {
@@ -97,14 +100,14 @@ export async function newOrderId() {
   }
 }
 
-export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef, userId, customerEmail, promoCode, discountUGX }) {
+export async function createOrder({ orderId, customerName, customerPhone, network, amountUGX, items, paymentRef, userId, customerEmail, promoCode, discountUGX, tracking }) {
   const sql = getSql();
   if (await ensureAccountColumns()) {
     const linked = await sql`
-      INSERT INTO orders (id, customer_name, customer_phone, network, amount_ugx, items, payment_ref, user_id, customer_email, promo_code, discount_ugx)
+      INSERT INTO orders (id, customer_name, customer_phone, network, amount_ugx, items, payment_ref, user_id, customer_email, promo_code, discount_ugx, tracking)
       VALUES (${orderId}, ${customerName}, ${customerPhone}, ${network}, ${amountUGX},
               ${JSON.stringify(items || [])}::jsonb, ${paymentRef || null}, ${userId || null}, ${customerEmail || null},
-              ${promoCode || null}, ${discountUGX || 0})
+              ${promoCode || null}, ${discountUGX || 0}, ${tracking ? JSON.stringify(tracking) : null}::jsonb)
       RETURNING *
     `;
     return linked[0];
@@ -191,6 +194,9 @@ export async function settlePayment(paymentRef, status, { failureReason } = {}) 
           console.error('[settlePayment] confirmation email failed for', order.id, e.message)
         );
       }
+      // The sale for Meta ads, sent once with this transition. Skips test
+      // orders and opted-out customers, and never throws.
+      await sendPurchaseToMeta(order);
     }
     return { changed: true, order };
   }

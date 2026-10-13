@@ -16,10 +16,11 @@ import { detectNetwork } from '@/lib/payments/networks';
  * in is only checked against our own re-pricing, never charged as-is.
  *
  * @param {{ account: {id, email}, customer: {name, phone}, network: string,
- *           items: object[], total: number, promoCode?: string }} input
+ *           items: object[], total: number, promoCode?: string,
+ *           tracking?: object }} input  tracking: see lib/meta-capi.js trackingFrom
  * @returns {Promise<{ status: number, body: object }>} the JSON reply
  */
-export async function startMobileMoneyOrder({ account, customer = {}, network, items = [], total, promoCode }) {
+export async function startMobileMoneyOrder({ account, customer = {}, network, items = [], total, promoCode, tracking }) {
   // Validate.
   if (!customer.name || !customer.phone) {
     return { status: 400, body: { error: 'Your name and mobile-money phone number are required.' } };
@@ -82,6 +83,8 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
       promoCode: promo?.code,
       discountUGX: promo?.discountUGX,
       paymentRef: null,
+      // For matching the sale to a Meta ad (lib/meta-capi.js).
+      tracking,
     });
   } catch (dbError) {
     console.error('[ORDER NOT PERSISTED]', orderId, dbError.message);

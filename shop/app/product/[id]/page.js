@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useCart } from '../../cart';
+import { contentId, track } from '@/lib/meta-pixel';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 
@@ -54,6 +55,13 @@ export default function ProductDetail() {
         if (!ok) { setError(d); return; }
         const p = d.product;
         setProduct(p);
+        track('ViewContent', {
+          content_ids: [contentId(p.id)],
+          content_name: p.title,
+          content_type: 'product',
+          value: Number(p.priceUGX) || 0,
+          currency: 'UGX',
+        });
         setMainImg(p.images?.[0] || p.variants?.[0]?.image || null);
         setVariant(p.variants?.[0] || null);
       })

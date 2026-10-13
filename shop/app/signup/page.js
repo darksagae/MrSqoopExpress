@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { nextFromUrl } from '@/lib/next-path';
+import { track } from '@/lib/meta-pixel';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -55,6 +56,7 @@ export default function SignupPage() {
       });
       const data = await res.json();
       if (!res.ok) { setCodeError(data.error || 'That code didn’t work.'); return; }
+      track('CompleteRegistration', { status: true });
 
       // Verified — sign them straight in with the credentials they just used.
       const login = await signIn('credentials', { email, password, redirect: false });

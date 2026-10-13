@@ -5,10 +5,20 @@ import { loadSettings, saveSettings, isSettingsAdmin } from '@/lib/settings';
  * GET / PUT /api/admin/settings
  *
  * Called by the admin site (never the browser) with the shared ingest secret.
- * Reads or changes the exchange rate, handling fee percentage and promo banner.
+ * Reads or changes the exchange rate, handling fee percentage, promo banner and
+ * Meta ads tracking.
  */
 const denied = () => NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
-const view = (s) => ({ rate: s.rate, handlingPercent: s.handlingPercent, promo: s.promo, promoImageVersion: s.promoImageVersion });
+// The Conversions API token never leaves the server: the admin only learns
+// whether one is saved.
+const view = (s) => ({
+  rate: s.rate,
+  handlingPercent: s.handlingPercent,
+  promo: s.promo,
+  promoImageVersion: s.promoImageVersion,
+  meta: s.meta,
+  metaCapiTokenSet: Boolean(s.metaCapiToken),
+});
 
 export async function GET(request) {
   if (!isSettingsAdmin(request)) return denied();

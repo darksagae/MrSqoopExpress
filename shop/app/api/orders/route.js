@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { networkStatus } from '@/lib/payments/resolve';
 import { startMobileMoneyOrder } from '@/lib/checkout';
 import { signedInUser } from '@/lib/session';
+import { trackingFrom } from '@/lib/meta-capi';
 
 /**
  * POST /api/orders
@@ -32,6 +33,6 @@ export async function POST(request) {
   }
 
   const { customer, network, items, total, promoCode } = body;
-  const result = await startMobileMoneyOrder({ account, customer, network, items, total, promoCode });
+  const result = await startMobileMoneyOrder({ account, customer, network, items, total, promoCode, tracking: trackingFrom(request) });
   return NextResponse.json(result.body, { status: result.status });
 }

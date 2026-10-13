@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useCart } from '../cart';
 import { CUSTOMER_DESTINATION_LABEL } from '@/lib/shipping-destination';
 import { detectNetwork } from '@/lib/payments/networks';
+import { contentId, track } from '@/lib/meta-pixel';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 
@@ -110,6 +111,25 @@ export default function CheckoutPage() {
   };
   // What the customer actually pays, after the promo.
   const payTotal = total - (promo?.discountUGX || 0);
+
+  // Meta ads tracking: what is in the order, kept from the moment Pay is
+  // pressed because the cart empties once the payment lands.
+  const ordered = useRef(null);
+  const tracked = useRef({ checkout: false, purchase: false });
+  const orderContents = () => ({
+    content_ids: items.map((c) => contentId(c.id)),
+    contents: items.map((c) => ({ id: contentId(c.id), quantity: Number(c.qty) || 1, item_price: Number(c.price) || 0 })),
+    content_type: 'product',
+    num_items: items.reduce((n, c) => n + (Number(c.qty) || 0), 0),
+    currency: 'UGX',
+  });
+  useEffect(() => {
+    if (tracked.current.checkout || authStatus !== 'authenticated' || !items.length) return;
+    tracked.current.checkout = true;
+    track('InitiateCheckout', { ...orderContents(), value: payTotal });
+    // Once per visit to the checkout.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus, items.length]);
   // "3 items", or "3 items, 2 products" when one product is bought more than once.
   const itemCount = items.reduce((n, c) => n + (Number(c.qty) || 0), 0);
   const countLabel =
@@ -168,6 +188,15 @@ export default function CheckoutPage() {
     return () => { cancelled = true; };
   }, [done, payStatus, clear]);
 
+  // Purchase, once, when the payment is confirmed. The order number is the
+  // event ID, so the server's copy of the same purchase (lib/meta-capi.js) is
+  // counted once. Test orders are never reported.
+  useEffect(() => {
+    if (payStatus !== 'SUCCESSFUL' || !done || done.test || tracked.current.purchase) return;
+    tracked.current.purchase = true;
+    track('Purchase', { ...(ordered.current || {}), value: Number(done.amountUGX) || 0, currency: 'UGX' }, { eventId: done.orderId });
+  }, [payStatus, done]);
+
   const submit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -181,6 +210,8 @@ export default function CheckoutPage() {
       );
 
     setSubmitting(true);
+    ordered.current = orderContents();
+    track('AddPaymentInfo', { ...ordered.current, value: payTotal });
 
     if (network === 'card') {
       try {

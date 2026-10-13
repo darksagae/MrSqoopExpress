@@ -35,10 +35,12 @@ export function ShopSettings() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [uploading, setUploading] = useState(false)
+  // A new Conversions API token typed in. The saved one is never shown.
+  const [capiToken, setCapiToken] = useState('')
 
   useEffect(() => {
     fetchShopSettings()
-      .then(setForm)
+      .then((s) => setForm({ ...s, meta: s.meta ?? { pixelId: '', testEventCode: '' } }))
       .catch((e: Error) => setLoadError(e.message))
   }, [])
 
@@ -48,9 +50,12 @@ export function ShopSettings() {
     setSaving(true)
     setMessage(null)
     try {
-      const { promoImageVersion, ...rest } = form
+      const { promoImageVersion, metaCapiTokenSet, ...rest } = form
       void promoImageVersion
-      setForm(await saveShopSettings(rest as Settings))
+      void metaCapiTokenSet
+      const token = capiToken.trim()
+      setForm(await saveShopSettings({ ...rest, ...(token ? { metaCapiToken: token } : {}) } as Settings))
+      setCapiToken('')
       setMessage({
         ok: true,
         text: form.promo.enabled
@@ -81,6 +86,23 @@ export function ShopSettings() {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Could not upload the banner.' })
     } finally {
       setUploading(false)
+    }
+  }
+
+  const removeCapiToken = async () => {
+    if (!form) return
+    setSaving(true)
+    setMessage(null)
+    try {
+      const { promoImageVersion, metaCapiTokenSet, ...rest } = form
+      void promoImageVersion
+      void metaCapiTokenSet
+      setForm(await saveShopSettings({ ...rest, metaCapiToken: '' } as Settings))
+      setMessage({ ok: true, text: 'Conversions API token removed.' })
+    } catch (e) {
+      setMessage({ ok: false, text: e instanceof Error ? e.message : 'Could not remove the token.' })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -229,6 +251,66 @@ export function ShopSettings() {
               Customers type the code at checkout. It takes the discount amount off the product prices (shipping and
               handling are charged in full; the discount never exceeds the items' cost), only on orders at or above the minimum, and stops working after the
               last day. Set the discount to 0 to show the banner without a working code.
+            </p>
+          </div>
+
+          <div className="grid gap-3 border-t border-neutral-800 pt-4 md:col-span-2">
+            <p className="font-semibold text-white">Meta Pixel (Facebook &amp; Instagram ads)</p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="grid gap-1 text-sm text-neutral-400">
+                Pixel ID
+                <input
+                  value={form.meta.pixelId}
+                  inputMode="numeric"
+                  maxLength={20}
+                  onChange={(e) => setForm({ ...form, meta: { ...form.meta, pixelId: e.target.value.replace(/\D/g, '') } })}
+                  placeholder="e.g. 1234567890123456"
+                  className={input}
+                />
+              </label>
+              <label className="grid gap-1 text-sm text-neutral-400">
+                Test event code (only while testing)
+                <input
+                  value={form.meta.testEventCode}
+                  maxLength={40}
+                  onChange={(e) =>
+                    setForm({ ...form, meta: { ...form.meta, testEventCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') } })
+                  }
+                  placeholder="TEST12345"
+                  className={input}
+                />
+              </label>
+            </div>
+            <label className="grid gap-1 text-sm text-neutral-400">
+              Conversions API access token
+              <input
+                type="password"
+                autoComplete="off"
+                value={capiToken}
+                onChange={(e) => setCapiToken(e.target.value)}
+                placeholder={form.metaCapiTokenSet ? 'Saved. Paste a new one only to replace it.' : 'Paste the token from Events Manager'}
+                className={input}
+              />
+            </label>
+            {form.metaCapiTokenSet && (
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <span className="text-green-400">Token saved</span>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void removeCapiToken()}
+                  className="rounded-full border border-red-500/60 px-4 py-2 text-red-400 disabled:opacity-60"
+                >
+                  Remove token
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-neutral-500">
+              Both come from Meta Events Manager → your pixel → Settings. With the Pixel ID set, the shop reports
+              visits, searches, product views, add to cart, checkout and purchases to Meta. The token lets the shop
+              also report each paid order from its own server, so a sale still counts when the customer approves
+              Mobile Money on their phone and never comes back to the page. Test orders are never reported. Leave
+              the Pixel ID empty to switch tracking off.
             </p>
           </div>
 

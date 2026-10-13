@@ -198,6 +198,12 @@ export interface ShopSettings {
   handlingPercent: number
   promo: { enabled: boolean; code: string; text: string; minOrder: number; discountUGX: number; endsAt: string }
   promoImageVersion: number
+  /** Meta (Facebook/Instagram) ads tracking. */
+  meta: { pixelId: string; testEventCode: string }
+  /** Whether a Conversions API token is saved. The token itself is never sent back. */
+  metaCapiTokenSet?: boolean
+  /** Only when saving: a new token, or '' to remove it. Left out, the saved one stays. */
+  metaCapiToken?: string
 }
 
 export async function fetchShopSettings(): Promise<ShopSettings> {

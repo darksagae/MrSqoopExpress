@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { contentId, track } from '@/lib/meta-pixel';
 
 const CartCtx = createContext(null);
 
@@ -20,6 +21,14 @@ export function CartProvider({ children }) {
   }, [items, loaded]);
 
   const add = useCallback((item, qty = 1) => {
+    track('AddToCart', {
+      content_ids: [contentId(item.id)],
+      content_name: item.name,
+      content_type: 'product',
+      contents: [{ id: contentId(item.id), quantity: qty, item_price: Number(item.price) || 0 }],
+      value: (Number(item.price) || 0) * qty,
+      currency: 'UGX',
+    });
     setItems((prev) => {
       const i = prev.findIndex((c) => c.id === item.id);
       if (i >= 0) {

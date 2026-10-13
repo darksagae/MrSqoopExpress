@@ -21,6 +21,13 @@ const DEFAULTS = {
   promo: { enabled: false, code: '', text: '', minOrder: 0, discountUGX: 0, endsAt: '' },
   // Bumped whenever the banner image changes; 0 = no image.
   promoImageVersion: 0,
+  // Meta (Facebook/Instagram) ads tracking. The pixel ID is public: it is in
+  // every page anyway. The test event code is only set while checking events
+  // arrive in Meta Events Manager.
+  meta: { pixelId: '', testEventCode: '' },
+  // Conversions API access token: secret. It is only ever used on the server
+  // and never sent back out, not even to the admin (see lib/meta-capi.js).
+  metaCapiToken: '',
 };
 
 let current = structuredClone(DEFAULTS);
@@ -84,6 +91,20 @@ export function validate(input = {}) {
         };
       }
     }
+  }
+  if (input.meta !== undefined) {
+    const m = input.meta || {};
+    const pixelId = String(m.pixelId ?? '').trim();
+    const testEventCode = String(m.testEventCode ?? '').trim().toUpperCase();
+    if (pixelId && !/^\d{10,20}$/.test(pixelId)) errors.push('The Meta Pixel ID is the number from Events Manager (digits only).');
+    else if (testEventCode && !/^[A-Z0-9]{3,40}$/.test(testEventCode)) errors.push('The test event code is letters and numbers only, e.g. TEST12345.');
+    else out.meta = { pixelId, testEventCode };
+  }
+  if (input.metaCapiToken !== undefined) {
+    const t = String(input.metaCapiToken ?? '').trim();
+    // An empty value removes the token.
+    if (t && !/^[A-Za-z0-9_-]{20,1024}$/.test(t)) errors.push('That doesn’t look like a Conversions API access token.');
+    else out.metaCapiToken = t;
   }
   if (input.promoImageVersion !== undefined) {
     const v = Number(input.promoImageVersion);

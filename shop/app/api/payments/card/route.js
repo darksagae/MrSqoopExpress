@@ -3,6 +3,7 @@ import { buildPaymentRequest, isCardConfigured, cardMissing } from '@/lib/paymen
 import { createOrder, newOrderId } from '@/lib/orders';
 import { confirmCartTotal } from '@/lib/pricing';
 import { signedInUser } from '@/lib/session';
+import { trackingFrom } from '@/lib/meta-capi';
 
 /**
  * POST /api/payments/card
@@ -64,6 +65,8 @@ export async function POST(request) {
       promoCode: promo?.code,
       discountUGX: promo?.discountUGX,
       paymentRef: transactionUuid,
+      // For matching the sale to a Meta ad (lib/meta-capi.js).
+      tracking: trackingFrom(request),
     });
   } catch (dbError) {
     // Never send the customer to pay for an order we have no record of.

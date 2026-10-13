@@ -1722,3 +1722,21 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
   .cat-row, .cat-row .pc { animation: none !important; }
   .pc, .pc:hover { transform: none; transition: none; }
 }
+
+/* Cookie notice for ads tracking (components/MetaPixel.js): bottom left, clear
+   of the assistant button on the right; on phones, just above it. */
+.track-notice {
+  position: fixed; left: 16px; bottom: 16px; z-index: 70;
+  max-width: 360px; padding: 14px 16px;
+  background: #111; color: #eee; border: 1px solid #2a2a2a; border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.3); font-size: 14px; line-height: 1.45;
+}
+.track-notice p { margin: 0; }
+.track-notice a { color: #fff; text-decoration: underline; }
+.track-notice-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.track-notice button { font: inherit; font-weight: 600; border-radius: 999px; padding: 7px 16px; cursor: pointer; }
+.track-notice-no { background: transparent; color: #ccc; border: 1px solid #444; }
+.track-notice-ok { background: #fff; color: #000; border: 1px solid #fff; }
+@media (max-width: 640px) {
+  .track-notice { right: 16px; bottom: 76px; max-width: none; }
+}

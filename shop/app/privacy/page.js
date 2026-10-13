@@ -1,3 +1,5 @@
+import TrackingChoice from './TrackingChoice';
+
 export const metadata = {
   title: 'Privacy Policy',
   description: 'How Mr Sqoop Express collects, uses and protects your personal information when you shop and have orders delivered to Uganda.',
@@ -38,6 +40,28 @@ export default function PrivacyPolicy() {
         MTN or Airtel solely to process the payment you initiate. We do not sell your
         personal information to third parties.
       </p>
+
+      <h2>Cookies and advertising</h2>
+      <p>
+        We use the Meta Pixel, a tool from Meta (Facebook and Instagram), to understand how
+        people use our shop and to show our ads to people likely to be interested in them. It
+        uses cookies and records actions on our site such as pages viewed, searches, items added
+        to the cart, checkouts and completed purchases, with the products and amounts involved.
+      </p>
+      <p>
+        When you complete a purchase, we also tell Meta about it from our own systems, so that a
+        sale is counted even if you approve the payment on your phone and don&apos;t return to the
+        page. With it we send your email address and phone number in scrambled (hashed) form,
+        which Meta can only match against its own accounts, together with your browser&apos;s
+        Meta cookies, internet address and browser type. Meta uses this to measure our ads and
+        to find people like our customers. We never send your password, payment details or
+        your delivery address.
+      </p>
+      <p>
+        You can say &quot;No thanks&quot; on the cookie notice, or turn ads tracking off here at any
+        time. It then stops on this device, including for purchases you make from it.
+      </p>
+      <TrackingChoice />
 
       <h2>Data security</h2>
       <p>

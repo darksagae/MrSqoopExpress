@@ -5,6 +5,7 @@ import SiteHeader from './components/SiteHeader';
 import SiteFooter from './components/SiteFooter';
 import CartDrawer from './components/CartDrawer';
 import Assistant from './components/assistant/Assistant';
+import MetaPixel from './components/MetaPixel';
 
 const SITE = 'https://www.mrsqoopexpress.com';
 
@@ -73,6 +74,7 @@ export default function RootLayout({ children }) {
             <SiteFooter />
             <CartDrawer />
             <Assistant />
+            <MetaPixel />
           </CartProvider>
         </AuthProvider>
       </body>

@@ -55,6 +55,15 @@ export default function CheckoutPage() {
   const [claiming, setClaiming] = useState(false);
   const [copied, setCopied] = useState(false);
   const isCardLink = done?.mode === 'link';
+  // How card payment works right now (see /api/settings/public); Bank Card is
+  // only offered when it can actually be paid.
+  const [cardMode, setCardMode] = useState(null);
+  useEffect(() => {
+    fetch('/api/settings/public')
+      .then((r) => r.json())
+      .then((d) => setCardMode(d?.card || null))
+      .catch(() => setCardMode(null));
+  }, []);
 
   // Get the exact AliExpress price and Uganda shipping for the quantities in the
   // basket before the customer pays, so the total they see is the total charged.
@@ -491,14 +500,14 @@ export default function CheckoutPage() {
               <span className="co-method-badge airtel">Airtel</span>
               <span>Airtel Money</span>
             </button>
-            <button
+            {cardMode && <button
               type="button"
               className={`co-method ${network === 'card' ? 'active' : ''}`}
               onClick={() => { setNetwork('card'); setTouchedNetwork(true); }}
             >
               <span className="co-method-badge card">VISA / MC</span>
               <span>Bank Card</span>
-            </button>
+            </button>}
           </div>
 
           <p className="co-note">

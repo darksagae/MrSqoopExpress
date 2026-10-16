@@ -32,6 +32,11 @@ const DEFAULTS = {
   // until the Secure Acceptance keys are set; see lib/payments/card-link.js.
   cardPayLink: '',
 };
+// A link set on Vercel (CARD_PAY_LINK) applies until one is saved in the admin;
+// once the admin saves the field, even empty, the saved value wins.
+if (process.env.CARD_PAY_LINK) {
+  DEFAULTS.cardPayLink = validate({ cardPayLink: process.env.CARD_PAY_LINK }).values.cardPayLink || '';
+}
 
 let current = structuredClone(DEFAULTS);
 let loadedAt = 0;

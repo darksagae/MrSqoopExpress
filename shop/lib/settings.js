@@ -28,6 +28,9 @@ const DEFAULTS = {
   // Conversions API access token: secret. It is only ever used on the server
   // and never sent back out, not even to the admin (see lib/meta-capi.js).
   metaCapiToken: '',
+  // Absa's card payment page (CyberSource Pay by Link), used for card payments
+  // until the Secure Acceptance keys are set; see lib/payments/card-link.js.
+  cardPayLink: '',
 };
 
 let current = structuredClone(DEFAULTS);
@@ -105,6 +108,18 @@ export function validate(input = {}) {
     // An empty value removes the token.
     if (t && !/^[A-Za-z0-9_-]{20,1024}$/.test(t)) errors.push('That doesn’t look like a Conversions API access token.');
     else out.metaCapiToken = t;
+  }
+  if (input.cardPayLink !== undefined) {
+    const link = String(input.cardPayLink ?? '').trim();
+    let ok = !link;
+    try {
+      const u = new URL(link);
+      ok = ok || (u.protocol === 'https:' && /(^|\.)cybersource\.com$/i.test(u.hostname));
+    } catch {
+      // not a URL
+    }
+    if (!ok) errors.push('The card payment link must be the https://…cybersource.com link from Absa.');
+    else out.cardPayLink = link;
   }
   if (input.promoImageVersion !== undefined) {
     const v = Number(input.promoImageVersion);

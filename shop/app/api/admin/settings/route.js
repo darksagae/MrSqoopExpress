@@ -18,6 +18,7 @@ const view = (s) => ({
   promoImageVersion: s.promoImageVersion,
   meta: s.meta,
   metaCapiTokenSet: Boolean(s.metaCapiToken),
+  cardPayLink: s.cardPayLink,
 });
 
 export async function GET(request) {

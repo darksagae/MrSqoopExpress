@@ -1,6 +1,7 @@
 import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
 import { createOrder, newOrderId, attachPaymentRef, failUnsentOrder, getOrderByRef, settlePayment } from '@/lib/orders';
 import { TEST_REF_PREFIX, isTestCheckout, isTestRef } from '@/lib/test-checkout';
+import { isCardLinkRef } from '@/lib/payments/card-link';
 import { confirmCartTotal } from '@/lib/pricing';
 import { detectNetwork } from '@/lib/payments/networks';
 
@@ -187,6 +188,14 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
  * @returns {Promise<{ status: number, body: object }>} the JSON reply
  */
 export async function checkPaymentStatus(network, reference) {
+  // A card payment through Absa's link is decided by the admin, so its outcome
+  // is our own record (lib/payments/card-link.js).
+  if (network === 'card' && isCardLinkRef(reference)) {
+    const order = await getOrderByRef(reference).catch(() => null);
+    const status = order?.payment_status || 'PENDING';
+    const settled = status === 'SUCCESSFUL' || status === 'FAILED';
+    return { status: 200, body: { reference, network, status, settled, paid: status === 'SUCCESSFUL' } };
+  }
   if (!NETWORKS.includes(network)) {
     return { status: 400, body: { error: 'network must be mtn or airtel' } };
   }

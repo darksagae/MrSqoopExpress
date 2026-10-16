@@ -11,6 +11,11 @@ import { NETWORK_LABEL } from './resolve';
  */
 export function explainFailure(network, reason) {
   const r = String(reason || '');
+  if (network === 'card') {
+    return /CARD_NOT_RECEIVED/.test(r)
+      ? 'We couldn’t find a card payment of the exact amount for this order. If your card was charged, contact us with your order number.'
+      : null;
+  }
   const wallet = NETWORK_LABEL[network] || 'Your network';
   if (/LOW_BALANCE|NOT_ENOUGH_FUNDS|INSUFFICIENT|LIMIT_REACHED|NOT_ALLOWED/i.test(r)) {
     return (

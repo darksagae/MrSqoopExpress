@@ -50,6 +50,11 @@ export default function CheckoutPage() {
   const [payStatus, setPayStatus] = useState(null);
   // The network's reason when it turned the payment down, in plain words.
   const [payReason, setPayReason] = useState(null);
+  // Card through Absa's payment link: the customer has pressed "I've paid".
+  const [cardClaimed, setCardClaimed] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const isCardLink = done?.mode === 'link';
 
   // Get the exact AliExpress price and Uganda shipping for the quantities in the
   // basket before the customer pays, so the total they see is the total charged.
@@ -154,10 +159,14 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!done?.reference || !done?.network) return;
     if (payStatus && payStatus !== 'PENDING') return;
+    // A card-link payment is checked by the admin; start watching once the
+    // customer says they've paid, and keep watching for longer.
+    if (done.mode === 'link' && !cardClaimed) return;
 
     let cancelled = false;
     let attempts = 0;
-    const MAX_ATTEMPTS = 40; // ~2 min at 3s
+    const MAX_ATTEMPTS = done.mode === 'link' ? 200 : 40; // ~20 min at 6s, ~2 min at 3s
+    const GAP_MS = done.mode === 'link' ? 6000 : 3000;
 
     const tick = async () => {
       if (cancelled) return;
@@ -180,13 +189,38 @@ export default function CheckoutPage() {
       }
       if (!cancelled) {
         if (attempts >= MAX_ATTEMPTS) setPayStatus('TIMEOUT');
-        else setTimeout(tick, 3000);
+        else setTimeout(tick, GAP_MS);
       }
     };
 
     tick();
     return () => { cancelled = true; };
-  }, [done, payStatus, clear]);
+  }, [done, payStatus, clear, cardClaimed]);
+
+  const claimCardPayment = async () => {
+    setClaiming(true);
+    try {
+      await fetch('/api/payments/card/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: done.orderId }),
+      });
+    } catch {
+      // The admin still sees the order; the flag only puts it first in the list.
+    }
+    setCardClaimed(true);
+    setClaiming(false);
+  };
+
+  const copyAmount = async () => {
+    try {
+      await navigator.clipboard.writeText(String(done.amountUGX));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked: the amount is on screen to type.
+    }
+  };
 
   // Purchase, once, when the payment is confirmed. The order number is the
   // event ID, so the server's copy of the same purchase (lib/meta-capi.js) is
@@ -233,6 +267,12 @@ export default function CheckoutPage() {
           setSubmitting(false);
           return;
         }
+        // Absa's payment link: show the exact amount and the link, here.
+        if (data.mode === 'link') {
+          setDone(data);
+          setSubmitting(false);
+          return;
+        }
         // Leave the button in its busy state while the browser navigates away.
         postToCardPage(data.endpoint, data.fields);
       } catch (err) {
@@ -274,6 +314,39 @@ export default function CheckoutPage() {
 
   // Request accepted by the provider. Whether it was *paid* is a separate
   // question, answered by the poll above — don't claim success before then.
+  if (done && isCardLink && !cardClaimed) {
+    return (
+      <div className="co-done co-cardlink">
+        <div className="co-done-check">💳</div>
+        <h1>Pay by Card</h1>
+        <p className="co-order-id">Order {done.orderId}</p>
+        <p>On the secure card payment page, pay this exact amount:</p>
+        <div className="co-pay-amount">
+          <span>{fmt(done.amountUGX)}</span>
+          <button type="button" onClick={() => void copyAmount()}>{copied ? 'Copied ✓' : 'Copy amount'}</button>
+        </div>
+        <ol className="co-pay-steps">
+          <li>Tap <strong>Copy amount</strong>.</li>
+          <li>Tap <strong>Open card payment</strong>. It opens in a new tab.</li>
+          <li>Paste the amount into the amount box, so it is exactly <strong>{String(done.amountUGX)}</strong>.</li>
+          <li>Pay with your Visa or Mastercard, then come back here and tap <strong>I’ve paid</strong>.</li>
+        </ol>
+        <div className="co-done-actions">
+          <a href={done.payLink} target="_blank" rel="noopener noreferrer" className="btn-dark co-continue">
+            Open card payment
+          </a>
+          <button type="button" className="co-continue co-continue-alt" disabled={claiming} onClick={() => void claimCardPayment()}>
+            {claiming ? 'One moment…' : 'I’ve paid'}
+          </button>
+        </div>
+        <p className="co-muted">
+          Your order goes ahead once we see a payment of exactly {fmt(done.amountUGX)}. A different
+          amount can’t be matched to your order.
+        </p>
+      </div>
+    );
+  }
+
   if (done) {
     const paid = payStatus === 'SUCCESSFUL';
     const rejected = payStatus === 'FAILED' || payStatus === 'REJECTED';
@@ -283,15 +356,26 @@ export default function CheckoutPage() {
       <div className="co-done">
         <div className="co-done-check">{paid ? '✓' : rejected ? '×' : '⏳'}</div>
         <h1>
-          {paid ? (done.test ? 'Test Order Placed' : 'Payment Received') : rejected ? 'Payment Not Completed' : 'Waiting for Your Approval'}
+          {paid
+            ? done.test ? 'Test Order Placed' : 'Payment Received'
+            : rejected ? 'Payment Not Completed' : isCardLink ? 'Confirming Your Card Payment' : 'Waiting for Your Approval'}
         </h1>
         <p className="co-order-id">Order {done.orderId}</p>
 
-        {waiting && (
+        {waiting && !isCardLink && (
           <>
             <p>{done.message}</p>
             <p className="co-muted">
               Keep this page open — it updates by itself once you approve the prompt.
+            </p>
+          </>
+        )}
+        {waiting && isCardLink && (
+          <>
+            <p>Thank you. We’re checking for your payment of {fmt(done.amountUGX)}.</p>
+            <p className="co-muted">
+              This usually takes a few minutes during working hours. Keep this page open, or we’ll
+              email you once it’s confirmed. Please don’t pay again.
             </p>
           </>
         )}
@@ -311,11 +395,19 @@ export default function CheckoutPage() {
           <>
             <p>The payment was not completed, so your order hasn’t been placed.</p>
             {payReason && <p>{payReason}</p>}
-            <p className="co-muted">Nothing has been charged. You can try again from your cart.</p>
+            <p className="co-muted">
+              {isCardLink ? 'Your items are still in your cart.' : 'Nothing has been charged. You can try again from your cart.'}
+            </p>
           </>
         )}
 
-        {payStatus === 'TIMEOUT' && (
+        {payStatus === 'TIMEOUT' && isCardLink && (
+          <>
+            <p>We’re still checking for your card payment of {fmt(done.amountUGX)}.</p>
+            <p className="co-muted">We’ll email you once it’s confirmed. Please don’t pay again.</p>
+          </>
+        )}
+        {payStatus === 'TIMEOUT' && !isCardLink && (
           <>
             <p>We haven’t heard back from your network yet.</p>
             <p className="co-muted">

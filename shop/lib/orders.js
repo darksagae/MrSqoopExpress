@@ -66,6 +66,8 @@ export function ensureAccountColumns() {
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_ugx BIGINT NOT NULL DEFAULT 0`;
         // Meta ads matching for the order (cookies, address, browser); see lib/meta-capi.js.
         await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking JSONB`;
+        // When a card-link customer pressed "I've paid" (lib/payments/card-link.js).
+        await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS card_claimed_at TIMESTAMPTZ`;
         await sql`CREATE INDEX IF NOT EXISTS orders_user_idx ON orders (user_id, created_at DESC) WHERE user_id IS NOT NULL`;
         return true;
       } catch (e) {

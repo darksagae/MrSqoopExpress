@@ -4,6 +4,7 @@ import { AdminLogin } from './AdminLogin'
 import { ResetPassword } from './ResetPassword'
 import { ShopSettings } from './ShopSettings'
 import { ConfirmDialog, plainError } from './ConfirmDialog'
+import { CardPayments } from './CardPayments'
 import { adminLogout, isAdminLoggedIn } from '../lib/adminAuth'
 import {
   advanceOrder,
@@ -830,6 +831,8 @@ export function AdminPage() {
             {ordersError}
           </p>
         )}
+
+        <CardPayments onDecided={loadOrders} />
 
         <section className="mt-8">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">

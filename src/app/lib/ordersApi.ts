@@ -204,6 +204,36 @@ export interface ShopSettings {
   metaCapiTokenSet?: boolean
   /** Only when saving: a new token, or '' to remove it. Left out, the saved one stays. */
   metaCapiToken?: string
+  /** Absa's card payment page (Pay by Link), used until the Secure Acceptance keys are set. */
+  cardPayLink?: string
+}
+
+/** A card payment made through Absa's payment link, waiting for the operator to find it. */
+export interface CardPayment {
+  orderId: string
+  customerName: string
+  phone: string
+  email: string | null
+  amountUGX: number
+  items: { name: string; qty: number }[]
+  placedAt: string
+  /** When the customer pressed "I've paid"; null if they haven't. */
+  claimedAt: string | null
+}
+
+export async function fetchCardPayments(): Promise<CardPayment[]> {
+  const response = await fetch('/api/card-payments', { headers: authHeaders(false) })
+  return (await parseJson<{ payments: CardPayment[] }>(response)).payments
+}
+
+/** Record whether a payment of the exact amount was found in Absa's portal. */
+export async function decideCardPayment(orderId: string, received: boolean): Promise<void> {
+  const response = await fetch('/api/card-payments', {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ orderId, received }),
+  })
+  await parseJson<{ ok: boolean }>(response)
 }
 
 export async function fetchShopSettings(): Promise<ShopSettings> {

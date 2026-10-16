@@ -255,6 +255,19 @@ export function ShopSettings() {
           </div>
 
           <div className="grid gap-3 border-t border-neutral-800 pt-4 md:col-span-2">
+            <p className="font-semibold text-white">Card payments (Absa)</p>
+            <label className="grid gap-1 text-sm text-neutral-400">
+              Card payment link
+              <input
+                value={form.cardPayLink ?? ''}
+                onChange={(e) => setForm({ ...form, cardPayLink: e.target.value.trim() })}
+                placeholder="https://ebc2.cybersource.com/ebc2/payByLink/pay/…"
+                className={input}
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-3 border-t border-neutral-800 pt-4 md:col-span-2">
             <p className="font-semibold text-white">Meta Pixel (Facebook &amp; Instagram ads)</p>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1 text-sm text-neutral-400">

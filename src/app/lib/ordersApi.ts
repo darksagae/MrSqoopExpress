@@ -222,13 +222,13 @@ export interface CardPayment {
 }
 
 export async function fetchCardPayments(): Promise<CardPayment[]> {
-  const response = await fetch('/api/card-payments', { headers: authHeaders(false) })
+  const response = await fetch('/api/settings?card=1', { headers: authHeaders(false) })
   return (await parseJson<{ payments: CardPayment[] }>(response)).payments
 }
 
 /** Record whether a payment of the exact amount was found in Absa's portal. */
 export async function decideCardPayment(orderId: string, received: boolean): Promise<void> {
-  const response = await fetch('/api/card-payments', {
+  const response = await fetch('/api/settings?card=1', {
     method: 'POST',
     headers: authHeaders(),
     body: JSON.stringify({ orderId, received }),

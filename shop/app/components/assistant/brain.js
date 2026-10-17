@@ -200,8 +200,8 @@ function faq(t, promo) {
   if (q(/\b(how long|when will|delivery time|how many days|how many weeks|take to (arrive|deliver|reach)|arrive|shipping time|delivery period)\b/) && !q(/\b(my order|my parcel|mse)\b/)) {
     return {
       text:
-        'Delivery to Uganda usually takes about 2 to 6 weeks, depending on the product. Every product shows its expected ' +
-        'delivery dates, and I can check one for you: just ask "when will the first one arrive?".',
+        'Delivery to Uganda takes 7 to 15 working days from when your payment is confirmed. Every product page shows its ' +
+        'expected delivery dates, and I can check one for you: just ask "when will the first one arrive?".',
       chips: ['Track my order', "Today's deals"],
     };
   }
@@ -215,8 +215,9 @@ function faq(t, promo) {
   if (q(/\b(how (can|do) i pay|payment (method|option)s?|pay(ing)? (with|by|using|via)|can i pay|mobile money|cash on delivery|pay on delivery|do you accept|card payment|visa|mastercard)\b/) && !q(/\b(did|went|go through|status)\b/)) {
     return {
       text:
-        'You pay with MTN Mobile Money or Airtel Money. When you order, a payment request comes to your phone and you approve it with your PIN. ' +
-        "We don't take cash on delivery. I can place the order for you and send the payment request right here.",
+        'You can pay with MTN Mobile Money, Airtel Money or a Visa or Mastercard bank card. With Mobile Money, a payment request comes to your phone and you approve it with your PIN. ' +
+        'With a card, you pay on a secure bank payment page at checkout. ' +
+        "We don't take cash on delivery. I can place a Mobile Money order for you right here; for a card payment, use checkout.",
       chips: ["Today's deals"],
     };
   }

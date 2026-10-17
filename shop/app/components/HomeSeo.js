@@ -5,7 +5,7 @@ const WHY = [
   ['Delivery to Uganda', 'Only products that can be delivered to Uganda are listed, each with its shipping cost and delivery window.'],
   ['Clear prices', 'You see the item price, the shipping and our handling fee before you pay. No surprises at checkout.'],
   ['Order tracking', 'Follow your order from payment to delivery in Track Order, with live status updates.'],
-  ['Convenient payment', 'Pay with MTN Mobile Money or Airtel Money, or by Visa or Mastercard where card payment is available.'],
+  ['Convenient payment', 'Pay with MTN Mobile Money or Airtel Money, or by Visa or Mastercard bank card.'],
 ];
 
 const STEPS = [

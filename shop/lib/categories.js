@@ -11,19 +11,22 @@
  * until /api/categories responds.
  */
 export const CATEGORIES = [
-  { label: 'Electronics',                  keyword: 'electronic gadgets' },
-  { label: 'Laptops',                      keyword: 'laptop' },
-  { label: 'Phones & Tablets',             keyword: 'smartphone' },
-  { label: 'Fashion',                      keyword: 'men trousers' },
-  { label: 'Home, Furniture & Appliances', keyword: 'furniture chair' },
-  { label: 'Beauty & Personal Care',       keyword: 'beauty products' },
-  { label: 'Fitness',                      keyword: 'fitness equipment' },
-  { label: 'Baby & Kids',                  keyword: 'baby toys' },
-  { label: 'Pet Supplies',                 keyword: 'pet supplies' },
-  { label: 'Automotive',                   keyword: 'car accessories' },
-  { label: 'Tools',                        keyword: 'hand tools' },
-  { label: 'Bags',                         keyword: 'travel bags' },
-  { label: 'Office',                       keyword: 'office supplies' },
+  { label: 'Men',                  keyword: 'men jacket hoodie' },
+  { label: 'Women',                keyword: 'women dress' },
+  { label: 'Shoes',                keyword: 'sneakers shoes' },
+  { label: 'Accessories',          keyword: 'fashion accessories handbag' },
+  { label: 'Home',                 keyword: 'furniture chair' },
+  { label: 'Electronics',          keyword: 'electronic gadgets' },
+  { label: 'Phones & Tablets',     keyword: 'smartphone' },
+  { label: 'Laptops',              keyword: 'laptop' },
+  { label: 'Beauty & Personal Care', keyword: 'beauty products' },
+  { label: 'Fitness',              keyword: 'fitness equipment' },
+  { label: 'Baby & Kids',          keyword: 'baby toys' },
+  { label: 'Pet Supplies',         keyword: 'pet supplies' },
+  { label: 'Automotive',           keyword: 'car accessories' },
+  { label: 'Tools',                keyword: 'hand tools' },
+  { label: 'Bags',                 keyword: 'travel bags' },
+  { label: 'Office',               keyword: 'office supplies' },
 ];
 
 /**

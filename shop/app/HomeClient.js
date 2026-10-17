@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -9,6 +9,8 @@ import { track } from '@/lib/meta-pixel';
 import { CATEGORIES } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
 import PromoBanner from './components/PromoBanner';
+import SortFilter from './components/SortFilter';
+import { DEFAULT_VIEW, applyView } from '@/lib/product-view';
 
 const fmt = (n) => 'UGX ' + Number(n || 0).toLocaleString('en-US');
 const PAGE_SIZE = 20;
@@ -392,6 +394,8 @@ function CategoryRow({ cat, index = 0, onAdd, onViewAll }) {
 export default function HomeClient({ initial = null }) {
   // Real supplier product imagery for the category tiles, fetched once.
   const [catImages, setCatImages] = useState({});
+  // A trending product picture for the hero banner, from the same request.
+  const [heroImage, setHeroImage] = useState(null);
   // keyword is what is typed; query is what was submitted. Empty query means
   // the default view: whatever AliExpress ranks as best selling.
   // The submitted search lives in the URL (/?q=shoes) rather than in memory, so
@@ -454,6 +458,7 @@ export default function HomeClient({ initial = null }) {
           if (c.image) byKeyword[c.keyword] = c.image;
         }
         setCatImages(byKeyword);
+        if (d.hero) setHeroImage(d.hero);
       })
       .catch(() => {/* placeholders stay in place */});
     return () => { cancelled = true; };
@@ -529,16 +534,18 @@ export default function HomeClient({ initial = null }) {
     rowRef.current?.scrollBy({ left: dir * rowRef.current.clientWidth * 0.8, behavior: 'smooth' });
 
   const { items, hasMore, loading, loadingMore, error, loadMore } = feed;
+  // Sort by and Filters for search results; each new search starts afresh.
+  const [view, setView] = useState(DEFAULT_VIEW);
+  useEffect(() => setView(DEFAULT_VIEW), [query]);
+  const shownItems = useMemo(() => applyView(items, view), [items, view]);
   const needle = keyword.trim().toLowerCase();
   const shownRecent = recent.filter((r) => !needle || (r.toLowerCase().includes(needle) && r.toLowerCase() !== needle));
 
   return (
     <>
-      {/* ===== Intro: what the shop is (the page's H1) ===== */}
-      <header className="home-intro">
-        <h1>Shop Online. Get Your Orders Delivered to Uganda.</h1>
-        <p>You shop. We ship. You smile.</p>
-      </header>
+      {/* The page's H1: what the shop is. Read by search engines and screen
+          readers; the hero banner below is what shoppers see. */}
+      <h1 className="sr-only">Shop Online. Get Your Orders Delivered to Uganda. You shop. We ship. You smile.</h1>
 
       {/* ===== Search bar ===== */}
       <div className="top-search">
@@ -548,7 +555,7 @@ export default function HomeClient({ initial = null }) {
             type="search"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder='Search "Shoes"'
+            placeholder="Search for anything..."
             aria-label="Search products"
             enterKeyHint="search"
             autoComplete="off"
@@ -573,6 +580,46 @@ export default function HomeClient({ initial = null }) {
           </div>
         )}
       </div>
+
+      {/* ===== Hero banner (not while looking at search results) ===== */}
+      {!query && <section className="section hero2-wrap" aria-label="Offer">
+        <div className="hero2">
+          <div className="hero2-copy">
+            <h2>Top Brands<span>Best Prices</span></h2>
+            <p>Fashion · Electronics · Home &amp; More</p>
+            <a href="#shop" className="hero2-btn">
+              Shop Now
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </a>
+          </div>
+          <div className="hero2-art" aria-hidden="true">
+            <i className="hero2-band b1" />
+            <i className="hero2-band b2" />
+            {heroImage && <img src={thumb(heroImage, 480)} alt="" decoding="async" />}
+          </div>
+        </div>
+      </section>}
+
+      {/* ===== Categories: one row of round icons ===== */}
+      <section className="section cat-section" id="categories" aria-label="Categories">
+        <div className="cat-strip">
+          {CATEGORIES.map((cat) => (
+            <button
+              type="button"
+              key={cat.label}
+              className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
+              onClick={() => pickCategory(cat)}
+            >
+              <span className={`cat-tile-img${catImages[cat.keyword] ? '' : ' is-empty'}`}>
+                {catImages[cat.keyword] && (
+                  <img src={thumb(catImages[cat.keyword], 240)} alt="" aria-hidden="true" loading="lazy" decoding="async" />
+                )}
+              </span>
+              <span className="cat-tile-label">{cat.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="section promo-wrap"><PromoBanner /></div>
 
@@ -620,9 +667,18 @@ export default function HomeClient({ initial = null }) {
 
         {!loading && !error && items.length > 0 && query && (
           <>
-            <div className="pgrid">
-              {items.map((p, i) => <ProductCard key={p.id} p={p} onAdd={addToCart} eager={i < 4} />)}
-            </div>
+            <SortFilter view={view} onChange={setView} shown={shownItems.length} total={items.length} hasMore={hasMore} />
+
+            {shownItems.length > 0 ? (
+              <div className="pgrid">
+                {shownItems.map((p, i) => <ProductCard key={p.id} p={p} onAdd={addToCart} eager={i < 4} />)}
+              </div>
+            ) : (
+              <p className="shop-status">
+                No loaded products match these filters.{' '}
+                <button type="button" className="sf-link" onClick={() => setView({ ...DEFAULT_VIEW, sort: view.sort })}>Clear filters</button>
+              </p>
+            )}
 
             {hasMore ? (
               <button type="button" className="load-more" onClick={loadMore} disabled={loadingMore}>
@@ -633,28 +689,6 @@ export default function HomeClient({ initial = null }) {
             )}
           </>
         )}
-      </section>
-
-      {/* ===== Categories ===== */}
-      <section className="section cat-section" id="categories">
-        <h2 className="section-title">Browse by Category</h2>
-        <div className="cat-strip">
-          {CATEGORIES.map((cat) => (
-            <button
-              type="button"
-              key={cat.label}
-              className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
-              onClick={() => pickCategory(cat)}
-            >
-              <span className={`cat-tile-img${catImages[cat.keyword] ? '' : ' is-empty'}`}>
-                {catImages[cat.keyword] && (
-                  <img src={thumb(catImages[cat.keyword], 240)} alt="" aria-hidden="true" loading="lazy" decoding="async" />
-                )}
-              </span>
-              <span className="cat-tile-label">{cat.label}</span>
-            </button>
-          ))}
-        </div>
       </section>
 
       {/* ===== One product row per category ===== */}

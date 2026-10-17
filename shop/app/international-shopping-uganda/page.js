@@ -10,8 +10,8 @@ export const metadata = {
 const FAQ = [
   ['Can I shop from international suppliers in Uganda?', 'Yes. Many international suppliers ship to Uganda, but not all. Mr Sqoop Express only lists products that can be delivered to Uganda, so you never pay for something that cannot arrive.'],
   ['How much does shipping to Uganda cost?', 'Shipping is quoted for each product and shown on the product page and at checkout. Some items ship free. Our handling fee is shown separately.'],
-  ['How do I pay?', 'Pay with MTN Mobile Money or Airtel Money. Card payment by Visa or Mastercard is added once it is available.'],
-  ['How long does delivery take?', 'Every product shows its estimated delivery window to Uganda. It depends on the seller and shipping method.'],
+  ['How do I pay?', 'Pay with MTN Mobile Money or Airtel Money, or with a Visa or Mastercard bank card. Mobile Money payments are approved with your PIN on your phone; card payments are made on a secure bank payment page.'],
+  ['How long does delivery take?', 'Delivery to Uganda takes 7 to 15 working days from when your payment is confirmed. Every product page shows its expected delivery dates.'],
   ['How do I track my order?', 'Sign in and open Track Order to follow your order from payment to delivery.'],
 ];
 
@@ -35,7 +35,7 @@ export default function InternationalShoppingUganda() {
       <h2>How international shopping to Uganda works</h2>
       <ol>
         <li>Find a product and check its option, price and shipping to Uganda.</li>
-        <li>Add it to your cart and pay with MTN Mobile Money or Airtel Money.</li>
+        <li>Add it to your cart and pay with MTN Mobile Money, Airtel Money or a Visa or Mastercard card.</li>
         <li>We confirm your payment and place your order.</li>
         <li>Follow the journey in Track Order until it reaches Uganda.</li>
       </ol>

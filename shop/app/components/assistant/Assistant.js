@@ -9,6 +9,28 @@ import { createBrain } from './brain';
 import { canListen, listen, speak, stopSpeaking, unlockAudio } from './speech';
 import './assistant.css';
 
+const POS_KEY = 'mse_assist_pos';
+const EDGE = 8; // the launcher never gets closer than this to a screen edge
+const DRAG_FROM = 6; // px of movement before a press counts as a drag, not a tap
+
+// The launcher's place, as its distance from the right and bottom edges (the
+// way the stylesheet anchors it, so a resize keeps it in the same corner).
+const viewport = () => ({ w: document.documentElement.clientWidth, h: document.documentElement.clientHeight });
+const placeOf = (el) => {
+  const r = el.getBoundingClientRect();
+  const { w, h } = viewport();
+  return { right: w - r.right, bottom: h - r.bottom };
+};
+function keepOnScreen(pos, el) {
+  const { w, h } = viewport();
+  const bw = el?.offsetWidth || 56;
+  const bh = el?.offsetHeight || 56;
+  return {
+    right: Math.round(Math.min(Math.max(pos.right, EDGE), Math.max(EDGE, w - bw - EDGE))),
+    bottom: Math.round(Math.min(Math.max(pos.bottom, EDGE), Math.max(EDGE, h - bh - EDGE))),
+  };
+}
+
 const ugx = (n) => 'UGX ' + new Intl.NumberFormat('en-UG').format(Math.round(n));
 const compact = (n) => (n >= 1000 ? `${Math.round(n / 100) / 10}k`.replace('.0k', 'k') : String(n));
 // Sold counts arrive as numbers (search) or text like "10000+" (product page).
@@ -84,6 +106,94 @@ export default function Assistant({ embedded = false }) {
   const stopListening = useRef(null);
   const logRef = useRef(null);
   const inputRef = useRef(null);
+
+  // The floating button can be dragged anywhere and remembers where it was left.
+  const launcherRef = useRef(null);
+  const gesture = useRef(null);
+  const wasDragged = useRef(false);
+  const [pos, setPos] = useState(null); // null = the stylesheet's corner
+  const [dragging, setDragging] = useState(false);
+  const placed = pos !== null;
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(POS_KEY));
+      if (saved && Number.isFinite(saved.right) && Number.isFinite(saved.bottom)) setPos({ right: saved.right, bottom: saved.bottom });
+    } catch {
+      /* no storage, or nothing saved: stay in the corner */
+    }
+  }, []);
+
+  // A smaller window must not strand the button off-screen.
+  useEffect(() => {
+    if (!placed || open || embedded) return undefined;
+    const fit = () =>
+      setPos((p) => {
+        if (!p) return p;
+        const c = keepOnScreen(p, launcherRef.current);
+        return c.right === p.right && c.bottom === p.bottom ? p : c;
+      });
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [placed, open, embedded]);
+
+  const remember = (p) => {
+    try {
+      localStorage.setItem(POS_KEY, JSON.stringify(p));
+    } catch {
+      /* the button still moves for this visit */
+    }
+  };
+  const onLauncherDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    gesture.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: placeOf(e.currentTarget), moving: false, last: null };
+    wasDragged.current = false;
+    // Hold the pointer from the start, so a quick flick can't leave the button behind.
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+  const onLauncherMove = (e) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    const dx = e.clientX - g.x;
+    const dy = e.clientY - g.y;
+    if (!g.moving) {
+      if (Math.hypot(dx, dy) < DRAG_FROM) return;
+      g.moving = true;
+      setDragging(true);
+    }
+    g.last = keepOnScreen({ right: g.from.right - dx, bottom: g.from.bottom - dy }, e.currentTarget);
+    setPos(g.last);
+  };
+  const onLauncherUp = (e) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    gesture.current = null;
+    if (!g.moving) return;
+    wasDragged.current = true; // the click that follows a drag must not open the chat
+    setDragging(false);
+    if (g.last) remember(g.last);
+  };
+  const onLauncherKey = (e) => {
+    const step = e.shiftKey ? 48 : 16;
+    const by = { ArrowLeft: [step, 0], ArrowRight: [-step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
+    if (!by) return;
+    e.preventDefault();
+    const from = pos || placeOf(e.currentTarget);
+    const next = keepOnScreen({ right: from.right + by[0], bottom: from.bottom + by[1] }, e.currentTarget);
+    setPos(next);
+    remember(next);
+  };
+  const openFromLauncher = () => {
+    if (wasDragged.current) {
+      wasDragged.current = false;
+      return;
+    }
+    unlockAudio();
+    setOpen(true);
+  };
+  // On a big screen the chat opens on the side the button was left on.
+  const panelLeft = !embedded && placed && typeof document !== 'undefined' && pos.right > viewport().w / 2 - 40;
 
   const firstName = session?.user?.name?.split(' ')[0];
   nameRef.current = firstName || null;
@@ -207,7 +317,7 @@ export default function Assistant({ embedded = false }) {
   const last = messages[messages.length - 1];
 
   const panel = (
-    <section className={`sa-panel${embedded ? ' sa-embedded' : ''}`} role={embedded ? undefined : 'dialog'} aria-label="Sqoop Assist">
+    <section className={`sa-panel${embedded ? ' sa-embedded' : ''}${panelLeft ? ' sa-left' : ''}`} role={embedded ? undefined : 'dialog'} aria-label="Sqoop Assist">
       {!embedded && <div className="sa-grab" aria-hidden="true" />}
       <header className="sa-head">
         <img src="/logo-white.png" alt="Mr Sqoop Express" className="sa-logo" />
@@ -469,8 +579,22 @@ export default function Assistant({ embedded = false }) {
       {open && <div className="sa-backdrop" onClick={() => setOpen(false)} aria-hidden="true" />}
       {open && panel}
       {!open && (
-        <button type="button" className="sa-launcher" onClick={() => { unlockAudio(); setOpen(true); }} aria-label="Open Sqoop Assist">
-          <img src="/logo-white.png" alt="" />
+        <button
+          type="button"
+          ref={launcherRef}
+          className={`sa-launcher${dragging ? ' dragging' : ''}`}
+          style={pos ? { right: pos.right, bottom: pos.bottom } : undefined}
+          onClick={openFromLauncher}
+          onPointerDown={onLauncherDown}
+          onPointerMove={onLauncherMove}
+          onPointerUp={onLauncherUp}
+          onPointerCancel={onLauncherUp}
+          onKeyDown={onLauncherKey}
+          onDragStart={(e) => e.preventDefault()}
+          aria-label="Open Sqoop Assist"
+          title="Drag to move"
+        >
+          <img src="/logo-white.png" alt="" draggable={false} />
           <span>Ask Sqoop</span>
         </button>
       )}

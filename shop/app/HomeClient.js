@@ -242,7 +242,7 @@ function writeRecent(list) {
  * hovers or scrolls it, resumes a few seconds after they let go, and does
  * nothing for people whose device asks for reduced motion.
  */
-function useDrift(ref, { reverse = false, active = true } = {}) {
+function useDrift(ref, { reverse = false, active = true, speed = 24 } = {}) {
   useEffect(() => {
     const el = ref.current;
     if (!el || !active || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
@@ -252,7 +252,11 @@ function useDrift(ref, { reverse = false, active = true } = {}) {
     let pausedUntil = performance.now() + 1200;
     let last = performance.now();
     let pos = el.scrollLeft;
-    const SPEED = 24; // pixels per second
+    // The position we last set. Browsers round scrollLeft to whole pixels, and
+    // reading that back each frame would make it move a whole pixel per frame,
+    // far faster than asked, so only a scroll that is not our own is adopted.
+    let mine = pos;
+    const SPEED = speed; // pixels per second
     const hold = (ms = 4000) => { pausedUntil = performance.now() + ms; pos = el.scrollLeft; };
     const tick = (now) => {
       const dt = Math.min(now - last, 64) / 1000;
@@ -264,10 +268,13 @@ function useDrift(ref, { reverse = false, active = true } = {}) {
         if (pos >= max) { pos = max; dir = -1; pausedUntil = now + 1200; }
         else if (pos <= 0) { pos = 0; dir = 1; pausedUntil = now + 1200; }
         el.scrollLeft = pos;
+        mine = el.scrollLeft;
       }
       raf = requestAnimationFrame(tick);
     };
-    const onScroll = () => { if (performance.now() > pausedUntil - 3900) pos = el.scrollLeft; };
+    const onScroll = () => {
+      if (Math.abs(el.scrollLeft - mine) > 1.5 && performance.now() > pausedUntil - 3900) pos = el.scrollLeft;
+    };
     const stops = ['pointerdown', 'touchstart', 'wheel', 'mouseenter', 'focusin'];
     const stop = () => hold();
     stops.forEach((e) => el.addEventListener(e, stop, { passive: true }));
@@ -285,7 +292,7 @@ function useDrift(ref, { reverse = false, active = true } = {}) {
       el.removeEventListener('mouseleave', leave);
       el.removeEventListener('scroll', onScroll);
     };
-  }, [ref, reverse, active]);
+  }, [ref, reverse, active, speed]);
 }
 
 // Rows are fetched one or two at a time. Opening all thirteen at once made the
@@ -441,6 +448,10 @@ export default function HomeClient({ initial = null }) {
     window.dispatchEvent(new Event('mse:url'));
   };
   const rowRef = useRef(null);
+  // The round category icons slide sideways by themselves, a little quicker
+  // than the product rows, and stop whenever they are touched.
+  const stripRef = useRef(null);
+  useDrift(stripRef, { speed: 32 });
 
   const { add, setOpen } = useCart();
   const router = useRouter();
@@ -583,7 +594,7 @@ export default function HomeClient({ initial = null }) {
 
       {/* ===== Categories: one row of round icons ===== */}
       <section className="section cat-section" id="categories" aria-label="Categories">
-        <div className="cat-strip">
+        <div className="cat-strip" ref={stripRef}>
           {CATEGORIES.map((cat) => (
             <button
               type="button"

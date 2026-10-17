@@ -7,6 +7,10 @@
   box-shadow: 0 10px 30px rgba(0,0,0,.28); transition: transform .15s ease, box-shadow .15s ease;
 }
 .sa-launcher:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(0,0,0,.34); }
+/* Draggable: the page must not scroll or select text while it is being moved. */
+.sa-launcher { width: max-content; touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.sa-launcher.dragging { cursor: grabbing; transform: scale(1.04); box-shadow: 0 18px 40px rgba(0,0,0,.4); transition: none; }
+.sa-launcher img { -webkit-user-drag: none; pointer-events: none; }
 .sa-launcher img { height: 40px; width: auto; border-radius: 999px; }
 
 .sa-panel {
@@ -18,6 +22,7 @@
   animation: sa-in .18s ease-out;
 }
 .sa-backdrop { display: none; }
+@media (min-width: 641px) { .sa-panel.sa-left { right: auto; left: 20px; } }
 .sa-grab { display: none; }
 @keyframes sa-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 .sa-panel.sa-embedded {

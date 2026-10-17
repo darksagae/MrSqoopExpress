@@ -768,7 +768,6 @@ img { display: block; max-width: 100%; }
   gap: 22px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   padding: 2px 2px 6px;
@@ -776,7 +775,6 @@ img { display: block; max-width: 100%; }
 .cat-strip::-webkit-scrollbar { display: none; }
 .cat-tile {
   flex: 0 0 var(--cat-w);
-  scroll-snap-align: start;
   background: none;
   border: 0;
   padding: 0;

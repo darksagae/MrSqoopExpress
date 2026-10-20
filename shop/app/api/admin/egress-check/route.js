@@ -32,18 +32,6 @@ import { aliexpressDS } from '@/lib/aliexpress';
  * last three days of transactions as LipaPay recorded them.
  */
 function authorized(request) {
-  // Short-lived operator access for payment troubleshooting only. This token
-  // cannot run account, voice, supplier, or general proxy diagnostics.
-  const diagnostic = process.env.PAYMENT_DIAGNOSTIC_TOKEN;
-  if (diagnostic) {
-    const age = Date.now() - Number(diagnostic.split(':')[0]);
-    const keys = [...new URL(request.url).searchParams.keys()];
-    const scoped = keys.length === 1 && ['order', 'formats', 'fees'].includes(keys[0]);
-    const actual = Buffer.from(request.headers.get('authorization') || '');
-    const expected = Buffer.from(`Bearer ${diagnostic}`);
-    if (age >= 0 && age < 30 * 60 * 1000 && scoped && actual.length === expected.length
-      && crypto.timingSafeEqual(actual, expected)) return true;
-  }
   const token = process.env.EGRESS_CHECK_TOKEN;
   if (!token) return false;
   const given = Buffer.from(request.headers.get('authorization') || '');

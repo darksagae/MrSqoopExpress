@@ -1,6 +1,6 @@
-import * as mtn from './mtn';
-import * as airtel from './airtel';
-import * as lipapay from './lipapay';
+import * as mtn from './mtn.js';
+import * as airtel from './airtel.js';
+import * as lipapay from './lipapay.js';
 
 /**
  * Picks which backend actually moves the money for a given network.

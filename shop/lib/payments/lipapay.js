@@ -165,6 +165,13 @@ function fail(json, fallbackCode) {
  */
 export async function requestToPay({ amountUGX, phone, orderId, note, network }) {
   const amount = Math.round(Number(amountUGX));
+  const channel = CHANNEL[network];
+  const traderId = normalizeMsisdn(phone);
+  if (!channel || !/^07\d{8}$/.test(traderId)) {
+    const err = new Error('A valid Ugandan mobile-money number and network are required.');
+    err.code = 'LIPAPAY_INVALID_WALLET';
+    throw err;
+  }
 
   if (!Number.isFinite(amount) || amount < MIN_AMOUNT_UGX) {
     const err = new Error(`LipaPay requires at least ${MIN_AMOUNT_UGX} UGX.`);
@@ -178,7 +185,7 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
     TimeStamp: Math.floor(Date.now() / 1000),
     // Honour the network the customer picked rather than auto-detecting, so a
     // mismatch fails loudly instead of silently charging the other wallet.
-    Channel: CHANNEL[network] ?? 0,
+    Channel: channel,
     OutTradeNo: orderId,
     // Amount is in CENTS. 500 UGX is 50000 — sending shillings undercharges
     // by 100x, sending the wrong way overcharges by 100x.
@@ -186,7 +193,7 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
     TransactionType: 1, // collection
     // LipaPay converts this to whatever form the network wants (MTN receives
     // 256XXXXXXXXX). Sending Airtel the 9-digit form made no difference.
-    TraderID: normalizeMsisdn(phone),
+    TraderID: traderId,
     // Customers routinely type a name that differs from the one registered on
     // their wallet. Matching on it would reject legitimate payments, so skip it.
     TraderFullName: 'NONEEDMATCHNAMES',
@@ -196,6 +203,15 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
   });
 
   if (!json.Succeeded) throw fail(json, 'LIPAPAY_REQUEST_FAILED');
+
+  // Acceptance is not proof that a handset prompt was delivered. Keep the
+  // platform reference so a missing prompt can be traced without logging the
+  // phone number, signature, key, or complete request/response payload.
+  console.info('[PAYMENT ACCEPTED]', {
+    orderId, network, channel, amountUGX: amount,
+    platformRef: json.Data?.TransactionId || null,
+    statusCode: json.StatusCode,
+  });
 
   return {
     transactionId: orderId,
@@ -234,10 +250,10 @@ export async function billEnquiry({ phone, amountUGX = MIN_AMOUNT_UGX, channel =
  * Authoritative status for an order.
  *
  * @param outTradeNo our order id, as passed to requestToPay
- * @returns 'SUCCESSFUL' | 'PENDING' | 'FAILED' — the vocabulary the rest of
- *          the app already speaks (see orders/status route).
+ * @returns {{ status: string, reason: string|null }} — status is authoritative;
+ *          reason is the provider's informational PayMessage.
  */
-export async function getPaymentStatus(outTradeNo) {
+export async function getPaymentResult(outTradeNo) {
   const { json, text } = await call('/api/pay/orderquery', {
     Version: 'v1.0',
     MchID: Number(MCH_ID),
@@ -250,7 +266,9 @@ export async function getPaymentStatus(outTradeNo) {
     // as 404 but actually 400 "OutTradeNo does not exist!" — treat either as
     // still-pending rather than a failure, or we would mark a live payment dead.
     const msg = errorText(json.Errors);
-    if (json.StatusCode === 404 || /does not exist/i.test(msg)) return 'PENDING';
+    if (json.StatusCode === 404 || /does not exist/i.test(msg)) {
+      return { status: 'PENDING', reason: null };
+    }
     throw fail(json, 'LIPAPAY_STATUS_FAILED');
   }
 
@@ -260,7 +278,17 @@ export async function getPaymentStatus(outTradeNo) {
     throw err;
   }
 
-  return payStatusToString(json.Data?.PayStatus);
+  // Do not discard PayMessage: polling or reconciliation may settle the
+  // payment before the callback, or the callback may never arrive.
+  return {
+    status: payStatusToString(json.Data?.PayStatus),
+    reason: json.Data?.PayMessage || null,
+  };
+}
+
+/** Compatibility for callbacks and callers that only need the status. */
+export async function getPaymentStatus(outTradeNo) {
+  return (await getPaymentResult(outTradeNo)).status;
 }
 
 /**

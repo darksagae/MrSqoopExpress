@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { listStalePending, listUnsynced, markSynced, settlePayment } from '@/lib/orders';
 import { syncOrderToTracking, isTrackingConfigured } from '@/lib/tracking';
 import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
+import { readPaymentResult } from '@/lib/payments/result';
 
 /**
  * GET /api/cron/reconcile-payments
@@ -30,12 +31,12 @@ export async function GET(request) {
     if (!ready) continue;
 
     try {
-      const status = String((await provider.getPaymentStatus(order.payment_ref)) || '').toUpperCase();
+      const { status, failureReason } = await readPaymentResult(provider, order.payment_ref);
       if (status === 'SUCCESSFUL' || status === 'FAILED' || status === 'REJECTED') {
         const { changed } = await settlePayment(
           order.payment_ref,
           status === 'SUCCESSFUL' ? 'SUCCESSFUL' : 'FAILED',
-          { failureReason: status === 'SUCCESSFUL' ? null : status }
+          { failureReason }
         );
         results.push({ orderId: order.id, status, changed });
       }

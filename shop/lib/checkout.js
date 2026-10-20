@@ -4,6 +4,7 @@ import { TEST_REF_PREFIX, isTestCheckout, isTestRef } from '@/lib/test-checkout'
 import { isCardLinkRef } from '@/lib/payments/card-link';
 import { confirmCartTotal } from '@/lib/pricing';
 import { detectNetwork } from '@/lib/payments/networks';
+import { readPaymentResult } from '@/lib/payments/result';
 
 /**
  * The mobile-money checkout, shared by the checkout page (POST /api/orders) and
@@ -217,8 +218,7 @@ export async function checkPaymentStatus(network, reference) {
   }
 
   try {
-    const raw = await provider.getPaymentStatus(reference);
-    const status = String(raw || 'UNKNOWN').toUpperCase();
+    const { status, failureReason } = await readPaymentResult(provider, reference);
     const settled = status === 'SUCCESSFUL' || status === 'FAILED' || status === 'REJECTED';
 
     // Write the outcome down. This is the path that saves us when a callback is
@@ -227,7 +227,7 @@ export async function checkPaymentStatus(network, reference) {
     if (settled) {
       try {
         await settlePayment(reference, status === 'SUCCESSFUL' ? 'SUCCESSFUL' : 'FAILED', {
-          failureReason: status === 'SUCCESSFUL' ? null : status,
+          failureReason,
         });
       } catch (dbError) {
         // Reporting the true status still beats failing the request outright.

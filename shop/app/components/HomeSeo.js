@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 const WHY = [
   ['International shopping', 'Browse thousands of products from trusted international suppliers, priced in Uganda shillings.'],
-  ['Delivery to Uganda', 'Only products that can be delivered to Uganda are listed, each with its shipping cost and delivery window.'],
+  ['Delivery to Uganda', 'Open a product to confirm delivery to Uganda, available options, shipping cost and delivery window.'],
   ['Clear prices', 'You see the item price, the shipping and our handling fee before you pay. No surprises at checkout.'],
   ['Order tracking', 'Follow your order from payment to delivery in Track Order, with live status updates.'],
   ['Convenient payment', 'Pay with MTN Mobile Money or Airtel Money, or by Visa or Mastercard bank card.'],

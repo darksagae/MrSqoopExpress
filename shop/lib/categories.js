@@ -5,10 +5,8 @@
  * we don't maintain a catalogue. The shop sells general goods, not only
  * electronics, so the list spans the range of what actually ships well:
  * gadgets, fashion, home, beauty, fitness, baby, pets, auto, tools, bags
- * and office supplies. Every image on the homepage (category tiles and the
- * hero) is a real product image pulled from the API, so the app ships no
- * bundled product artwork at all. Tiles render an empty placeholder box
- * until /api/categories responds.
+ * and office supplies. Category tiles reuse real product photos from cached listings. Loading
+ * icons does not start a separate batch of supplier searches.
  */
 export const CATEGORIES = [
   { label: 'Men',                  keyword: 'men jacket hoodie' },

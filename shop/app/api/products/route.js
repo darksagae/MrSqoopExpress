@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { aliexpressDS } from '@/lib/aliexpress';
 import { quoteFreightForAll, priceProducts } from '@/lib/catalog';
 import { attachSkus } from '@/lib/trending';
+import { getBrowseProducts } from '@/lib/browse-products';
 import {
   CUSTOMER_DESTINATION,
   CUSTOMER_DESTINATION_LABEL,
@@ -39,9 +40,9 @@ const MAX_PAGE_SIZE = 50;
 export async function GET(request) {
   await loadSettings();
   const { searchParams } = new URL(request.url);
-  const keyword = searchParams.get('keyword') || '';
-  const page = parseInt(searchParams.get('page') || '1', 10);
-  const limit = parseInt(searchParams.get('limit') || '20', 10);
+  const keyword = (searchParams.get('keyword') || '').trim().slice(0, 200);
+  const page = Math.min(100, Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1));
+  const limit = Math.min(30, Math.max(1, parseInt(searchParams.get('limit') || '20', 10) || 20));
   // Escape hatch for callers that only need titles and prices quickly.
   const withShipping = searchParams.get('shipping') !== '0';
   // Undeliverable products are dropped by default. deliverable=0 keeps them, so
@@ -67,6 +68,17 @@ export async function GET(request) {
   }
 
   try {
+    if (searchParams.get('preview') === '1') {
+      // Browsing needs one search, not a detail and freight call per item.
+      // Product pages and checkout confirm options, shipping and availability.
+      const listing = await getBrowseProducts({ keyword, page, limit });
+      const products = priceProducts(listing.products, []).map((product) => ({ ...product, skuId: null }));
+      return NextResponse.json({ success: true, preview: true, keyword, products,
+        count: products.length, hasMore: products.length > 0,
+        updatedAt: new Date(listing.updatedAt).toISOString(), stale: listing.stale,
+      }, { headers: { 'Cache-Control': products.length
+        ? 'public, s-maxage=60, stale-while-revalidate=86400' : 'no-store' } });
+    }
     // Ask for more than requested when filtering, otherwise a page of 20 can
     // arrive as 12 and the grid looks half-empty. Capped because every extra
     // product is another freight quote.

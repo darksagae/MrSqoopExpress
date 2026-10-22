@@ -8,6 +8,7 @@ import { useCart } from './cart';
 import { track } from '@/lib/meta-pixel';
 import { CATEGORIES } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
+import { listings } from '@/lib/listing-cache';
 import PromoBanner from './components/PromoBanner';
 import SortFilter from './components/SortFilter';
 import { DEFAULT_VIEW, applyView } from '@/lib/product-view';
@@ -101,6 +102,7 @@ function ProductCard({ p, onAdd, eager = false }) {
       </p>
 
       {p.shipping?.free && <p className="pc-ship"><TruckIcon /> Free Delivery</p>}
+      {p.shipping?.known === false && <p className="pc-ship">Check delivery on product</p>}
     </article>
   );
 }
@@ -118,13 +120,15 @@ function useFeed(query, initial) {
   const [hasMore, setHasMore] = useState(initial ? initial.hasMore : true);
   const [loading, setLoading] = useState(!initial);
   const seeded = useRef(Boolean(initial));
+  const activeQuery = useRef(query);
+  activeQuery.current = query;
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
 
   const urlFor = useCallback(
     (n) =>
       query
-        ? `/api/products?keyword=${encodeURIComponent(query)}&page=${n}&limit=${PAGE_SIZE}`
+        ? `/api/products?keyword=${encodeURIComponent(query)}&page=${n}&limit=${PAGE_SIZE}&preview=1`
         : `/api/trending?page=${n}&limit=${PAGE_SIZE}`,
     [query]
   );
@@ -132,40 +136,36 @@ function useFeed(query, initial) {
   useEffect(() => {
     // The first render already holds the pre-rendered best picks.
     if (seeded.current && !query) {
+      listings.write(urlFor(1), initial);
       seeded.current = false;
       return undefined;
     }
     seeded.current = false;
 
     let cancelled = false;
-    setLoading(true);
+    const url = urlFor(1);
+    const cached = listings.read(url);
+    setItems(cached?.data.products || []);
+    setHasMore(cached ? Boolean(cached.data.hasMore) : true);
+    setLoading(!cached);
     setError(null);
     setPage(1);
-    const first = () =>
-      fetch(urlFor(1))
-        .then((r) => r.json().then((d) => ({ ok: r.ok, status: r.status, d })))
-        .then((res) => {
-          // Empty or failed (supplier briefly busy): wait and try once more, past
-          // any cached copy. "Busy" waits out the supplier's short pause.
-          if (!res.ok || !(res.d.products || []).length) {
-            return new Promise((r) => setTimeout(r, res.status === 503 ? 6000 : 1500)).then(() =>
-              fetch(`${urlFor(1)}&_=${Date.now()}`).then((r) => r.json().then((d) => ({ ok: r.ok, d }))));
-          }
-          return res;
-        });
-    first()
-      .then(({ ok, d }) => {
+    setLoadingMore(false);
+    if (!cached?.fresh) listings.load(url)
+      .then((data) => {
         if (cancelled) return;
-        if (!ok) {
-          setError(d);
-          setItems([]);
-          setHasMore(false);
-        } else {
-          setItems(d.products || []);
-          setHasMore(Boolean(d.hasMore));
+        // A temporary empty answer must not clear a useful cached listing.
+        if (data.products.length || !cached) {
+          setItems(data.products);
+          setHasMore(Boolean(data.hasMore));
         }
       })
-      .catch((e) => !cancelled && setError({ error: 'Network error', message: e.message }))
+      .catch((e) => {
+        if (!cancelled && !cached) {
+          setError(e.detail || { error: 'Could not load products', message: e.message });
+          setHasMore(false);
+        }
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
   }, [urlFor, query]);
@@ -174,13 +174,9 @@ function useFeed(query, initial) {
     if (loadingMore || loading || !hasMore) return;
     const next = page + 1;
     setLoadingMore(true);
-    fetch(urlFor(next))
-      .then((r) => r.json().then((d) => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => {
-        if (!ok) {
-          setHasMore(false);
-          return;
-        }
+    listings.load(urlFor(next))
+      .then((d) => {
+        if (activeQuery.current !== query) return;
         const list = d.products || [];
         // AliExpress can repeat an item across pages.
         setItems((prev) => {
@@ -190,9 +186,9 @@ function useFeed(query, initial) {
         setPage(next);
         setHasMore(Boolean(d.hasMore));
       })
-      .catch(() => setHasMore(false))
-      .finally(() => setLoadingMore(false));
-  }, [urlFor, page, hasMore, loading, loadingMore]);
+      .catch(() => { if (activeQuery.current === query) setHasMore(false); })
+      .finally(() => { if (activeQuery.current === query) setLoadingMore(false); });
+  }, [urlFor, page, hasMore, loading, loadingMore, query]);
 
   return { items, hasMore, loading, loadingMore, error, loadMore };
 }
@@ -311,24 +307,7 @@ function pumpRows() {
     next().finally(() => { rowsRunning -= 1; pumpRows(); });
   }
 }
-const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function fetchRow(keyword, isCancelled) {
-  const base = `/api/products?keyword=${encodeURIComponent(keyword)}&page=1&limit=${ROW_SIZE}`;
-  // Up to three tries, each a little later, the later ones past any cached copy.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (isCancelled()) return null;
-    try {
-      const r = await fetch(attempt ? `${base}&_=${Date.now()}` : base);
-      if (r.ok) {
-        const d = await r.json();
-        if (d?.products?.length) return d.products;
-      }
-    } catch { /* try again */ }
-    await wait(1500 * (attempt + 1));
-  }
-  return [];
-}
+const rowUrl = (keyword) => `/api/products?keyword=${encodeURIComponent(keyword)}&page=1&limit=${ROW_SIZE}&preview=1`;
 
 /**
  * A titled, sideways-scrolling row of one category's products. It fetches only
@@ -336,7 +315,7 @@ async function fetchRow(keyword, isCancelled) {
  * at once. A row that cannot load keeps its place with a Try again button
  * rather than disappearing.
  */
-function CategoryRow({ cat, onAdd, onViewAll }) {
+function CategoryRow({ cat, onAdd, onViewAll, onImage }) {
   const ref = useRef(null);
   const [state, setState] = useState({ status: 'idle', items: [] });
   const [attempt, setAttempt] = useState(0);
@@ -346,11 +325,24 @@ function CategoryRow({ cat, onAdd, onViewAll }) {
     if (!el) return undefined;
     let cancelled = false;
     const load = () => {
-      setState((s) => (s.status === 'ready' ? s : { status: 'loading', items: [] }));
+      const url = rowUrl(cat.keyword);
+      const cached = listings.read(url);
+      setState(cached ? { status: 'ready', items: cached.data.products } : { status: 'loading', items: [] });
+      if (cached) onImage(cat.keyword, cached.data.products);
+      if (cached?.fresh) return;
       enqueueRow(async () => {
-        const items = await fetchRow(cat.keyword, () => cancelled);
-        if (cancelled || items === null) return;
-        setState({ status: items.length ? 'ready' : 'failed', items });
+        if (cancelled) return;
+        try {
+          const data = await listings.load(url);
+          if (cancelled) return;
+          if (data.products.length) {
+            setState({ status: 'ready', items: data.products });
+            onImage(cat.keyword, data.products);
+          }
+          else if (!cached) setState({ status: 'failed', items: [] });
+        } catch {
+          if (!cancelled && !cached) setState({ status: 'failed', items: [] });
+        }
       });
     };
     if (typeof IntersectionObserver === 'undefined') {
@@ -365,7 +357,7 @@ function CategoryRow({ cat, onAdd, onViewAll }) {
     }, { rootMargin: '600px 0px' });
     io.observe(el);
     return () => { cancelled = true; io.disconnect(); };
-  }, [cat.keyword, attempt]);
+  }, [cat.keyword, attempt, onImage]);
 
   return (
     <section className="section cat-row" ref={ref} aria-label={cat.label}>
@@ -398,6 +390,10 @@ function CategoryRow({ cat, onAdd, onViewAll }) {
 export default function HomeClient({ initial = null }) {
   // Real supplier product imagery for the category tiles, fetched once.
   const [catImages, setCatImages] = useState({});
+  const rememberCategoryImage = useCallback((keyword, products) => {
+    const image = products.find((p) => p.image)?.image;
+    if (image) setCatImages((old) => old[keyword] === image ? old : { ...old, [keyword]: image });
+  }, []);
   // keyword is what is typed; query is what was submitted. Empty query means
   // the default view: whatever AliExpress ranks as best selling.
   // The submitted search lives in the URL (/?q=shoes) rather than in memory, so
@@ -462,7 +458,7 @@ export default function HomeClient({ initial = null }) {
         for (const c of d.categories) {
           if (c.image) byKeyword[c.keyword] = c.image;
         }
-        setCatImages(byKeyword);
+        setCatImages((old) => ({ ...byKeyword, ...old }));
       })
       .catch(() => {/* placeholders stay in place */});
     return () => { cancelled = true; };
@@ -679,7 +675,7 @@ export default function HomeClient({ initial = null }) {
 
       {/* ===== One product row per category ===== */}
       {CATEGORIES.map((cat) => (
-        <CategoryRow key={cat.keyword} cat={cat} onAdd={addToCart} onViewAll={pickCategory} />
+        <CategoryRow key={cat.keyword} cat={cat} onAdd={addToCart} onViewAll={pickCategory} onImage={rememberCategoryImage} />
       ))}
 
       {/* ===== Trust badges ===== */}

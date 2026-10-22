@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { egressFetch } from '../egress.js';
+import { collectionFields, normalizeWallet } from './lipapay-request.js';
 
 /**
  * LipaPay — aggregated MTN Mobile Money + Airtel Money collection.
@@ -33,8 +34,6 @@ const NOTIFY_URL = process.env.LIPAPAY_NOTIFY_URL;
 
 /** UGX below this is rejected by the platform. */
 export const MIN_AMOUNT_UGX = 500;
-
-const CHANNEL = { mtn: 1, airtel: 2 };
 
 export function isLipaPayConfigured() {
   return Boolean(MCH_ID && PRIVATE_KEY && NOTIFY_URL);
@@ -85,7 +84,7 @@ function rawField(text, key) {
  */
 export function verifySignature(rawText, fieldOrder) {
   const expected = rawField(rawText, 'Sign');
-  if (!expected) return false;
+  if (!expected || !/^[a-f0-9]{32}$/.test(expected)) return false;
   const fields = {};
   for (const key of fieldOrder) {
     const v = rawField(rawText, key);
@@ -118,6 +117,7 @@ async function call(path, fields) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ...fields, Sign: sign(fields) }),
+    signal: AbortSignal.timeout(20000),
   });
 
   // LipaPay answers HTTP 200 even for hard failures; the real code is in the
@@ -130,6 +130,9 @@ async function call(path, fields) {
     const err = new Error(`LipaPay returned non-JSON (${res.status}): ${text.slice(0, 200)}`);
     err.code = 'LIPAPAY_BAD_RESPONSE';
     throw err;
+  }
+  if (!json || Array.isArray(json) || typeof json.Succeeded !== 'boolean') {
+    throw Object.assign(new Error('Invalid LipaPay response envelope.'), { code: 'LIPAPAY_BAD_RESPONSE' });
   }
   return { json, text };
 }
@@ -147,7 +150,8 @@ function errorText(errors) {
 
 function fail(json, fallbackCode) {
   const err = new Error(`LipaPay: ${errorText(json.Errors)}`);
-  err.code = json.StatusCode === 403 ? 'LIPAPAY_IP_NOT_WHITELISTED' : fallbackCode;
+  err.code = json.StatusCode === 403 && /IP address|whitelist|not authorized/i.test(errorText(json.Errors))
+    ? 'LIPAPAY_IP_NOT_WHITELISTED' : fallbackCode;
   err.statusCode = json.StatusCode;
   return err;
 }
@@ -164,51 +168,44 @@ function fail(json, fallbackCode) {
  *          takes, so it doubles as the payment reference we persist.
  */
 export async function requestToPay({ amountUGX, phone, orderId, note, network }) {
-  const amount = Math.round(Number(amountUGX));
-  const channel = CHANNEL[network];
-  const traderId = normalizeMsisdn(phone);
-  if (!channel || !/^07\d{8}$/.test(traderId)) {
-    const err = new Error('A valid Ugandan mobile-money number and network are required.');
-    err.code = 'LIPAPAY_INVALID_WALLET';
-    throw err;
+  const fields = collectionFields({ merchantId: MCH_ID, notifyUrl: NOTIFY_URL,
+    amountUGX, phone, orderId, note, network });
+  let response;
+  try {
+    response = await call('/api/pay/unifiedorder', fields);
+  } catch (error) {
+    // The response may have been lost AFTER the gateway accepted the debit.
+    // Keep this reference available for reconciliation; never submit a new one.
+    error.code ||= 'LIPAPAY_TRANSPORT_ERROR';
+    error.paymentUncertain = true;
+    error.referenceId = orderId;
+    throw error;
+  }
+  const { json, text } = response;
+  if (!json.Succeeded) {
+    const error = fail(json, 'LIPAPAY_REQUEST_FAILED');
+    if ([500, 502].includes(Number(json.StatusCode)) || /duplicate/i.test(errorText(json.Errors))) {
+      error.paymentUncertain = true;
+      error.referenceId = orderId;
+    }
+    throw error;
   }
 
-  if (!Number.isFinite(amount) || amount < MIN_AMOUNT_UGX) {
-    const err = new Error(`LipaPay requires at least ${MIN_AMOUNT_UGX} UGX.`);
-    err.code = 'LIPAPAY_AMOUNT_TOO_LOW';
-    throw err;
+  const receipt = json.Data;
+  const receiptFields = ['OutTradeNo', 'TransactionId', 'ActualPaymentAmount',
+    'ActualCollectAmount', 'PayerCharge', 'PayeeCharge', 'ChannelCharge'];
+  if (!receipt || receipt.OutTradeNo !== orderId || !receipt.TransactionId
+    || !verifySignature(text, receiptFields)) {
+    throw Object.assign(new Error('Payment acceptance could not be verified; query the existing reference.'), {
+      code: 'LIPAPAY_BAD_RECEIPT', paymentUncertain: true, referenceId: orderId,
+    });
   }
-
-  const { json } = await call('/api/pay/unifiedorder', {
-    Version: 'v1.0',
-    MchID: Number(MCH_ID),
-    TimeStamp: Math.floor(Date.now() / 1000),
-    // Honour the network the customer picked rather than auto-detecting, so a
-    // mismatch fails loudly instead of silently charging the other wallet.
-    Channel: channel,
-    OutTradeNo: orderId,
-    // Amount is in CENTS. 500 UGX is 50000 — sending shillings undercharges
-    // by 100x, sending the wrong way overcharges by 100x.
-    Amount: amount * 100,
-    TransactionType: 1, // collection
-    // LipaPay converts this to whatever form the network wants (MTN receives
-    // 256XXXXXXXXX). Sending Airtel the 9-digit form made no difference.
-    TraderID: traderId,
-    // Customers routinely type a name that differs from the one registered on
-    // their wallet. Matching on it would reject legitimate payments, so skip it.
-    TraderFullName: 'NONEEDMATCHNAMES',
-    Description: note || `MrSqoopExpress ${orderId}`,
-    NotifyUrl: NOTIFY_URL,
-    // Sign added by call()
-  });
-
-  if (!json.Succeeded) throw fail(json, 'LIPAPAY_REQUEST_FAILED');
 
   // Acceptance is not proof that a handset prompt was delivered. Keep the
   // platform reference so a missing prompt can be traced without logging the
   // phone number, signature, key, or complete request/response payload.
   console.info('[PAYMENT ACCEPTED]', {
-    orderId, network, channel, amountUGX: amount,
+    orderId, network, channel: fields.Channel, amountUGX: fields.Amount / 100,
     platformRef: json.Data?.TransactionId || null,
     statusCode: json.StatusCode,
   });
@@ -280,6 +277,9 @@ export async function getPaymentResult(outTradeNo) {
 
   // Do not discard PayMessage: polling or reconciliation may settle the
   // payment before the callback, or the callback may never arrive.
+  if (json.Data?.OutTradeNo !== outTradeNo) {
+    throw Object.assign(new Error('Payment status belongs to a different reference.'), { code: 'LIPAPAY_WRONG_REFERENCE' });
+  }
   return {
     status: payStatusToString(json.Data?.PayStatus),
     reason: json.Data?.PayMessage || null,
@@ -347,8 +347,5 @@ export function payStatusToString(payStatus) {
  * platform's examples use. Accepts +256…/256… and normalises back down.
  */
 function normalizeMsisdn(phone) {
-  const p = String(phone).replace(/[^0-9]/g, '');
-  if (p.startsWith('256')) return '0' + p.slice(3);
-  if (!p.startsWith('0')) return '0' + p;
-  return p;
+  return normalizeWallet(phone);
 }

@@ -367,7 +367,8 @@ export default function CheckoutPage() {
         <h1>
           {paid
             ? done.test ? 'Test Order Placed' : 'Payment Received'
-            : rejected ? 'Payment Not Completed' : isCardLink ? 'Confirming Your Card Payment' : 'Waiting for Your Approval'}
+            : rejected ? 'Payment Not Completed' : isCardLink ? 'Confirming Your Card Payment'
+              : done.requestUncertain ? 'Checking Your Payment Request' : 'Waiting for Your Approval'}
         </h1>
         <p className="co-order-id">Order {done.orderId}</p>
 
@@ -375,7 +376,9 @@ export default function CheckoutPage() {
           <>
             <p>{done.message}</p>
             <p className="co-muted">
-              Keep this page open — it updates by itself once you approve the prompt.
+              {done.requestUncertain
+                ? 'Keep this page open while we check this request. Please don’t start another payment.'
+                : 'Keep this page open — it updates by itself once you approve the prompt.'}
             </p>
           </>
         )}

@@ -26,6 +26,17 @@ function signedResult({ status = 2, message = 'Transaction not found', signature
   return `{"Succeeded":true,"StatusCode":200,"Data":{${fields.join(',')}}}`;
 }
 
+
+function signedAcceptance({ reference = 'OFFLINE-001', signature = null } = {}) {
+  const values = { OutTradeNo: reference, TransactionId: 'platform-reference',
+    ActualPaymentAmount: '508.00', ActualCollectAmount: '495.00',
+    PayerCharge: '8.00', PayeeCharge: '5.00', ChannelCharge: '10.16' };
+  const base = Object.entries(values).map(([k,v]) => `${k}=${v}`).join('&');
+  const sign = signature ?? crypto.createHash('md5').update(base + '&privateKey=offline-test-key').digest('hex');
+  const fields = Object.entries(values).map(([k,v]) => `${JSON.stringify(k)}:${['OutTradeNo','TransactionId'].includes(k) ? JSON.stringify(v) : v}`);
+  return `{"Succeeded":true,"StatusCode":200,"Data":{${fields.join(',')},"Sign":"${sign}"}}`;
+}
+
 function reply(t, body) {
   t.mock.method(globalThis, 'fetch', async () => new Response(body));
 }
@@ -34,7 +45,7 @@ test('Airtel request uses channel 2, local phone and cents for all supported inp
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     calls.push({url, body:JSON.parse(init.body)});
-    return Response.json({Succeeded:true, StatusCode:200, Data:{TransactionId:'platform-reference'}});
+    return new Response(signedAcceptance());
   });
   t.mock.method(console, 'info', () => {});
   for (const phone of ['0750000000', '750000000', '+256 750 000 000']) {
@@ -98,4 +109,60 @@ test('missing Airtel transaction is not blamed on an unanswered PIN prompt', () 
     assert.doesNotMatch(explainFailure('airtel', reason), /approval in time/);
   }
   assert.match(explainFailure('mtn','TIMEOUT'), /approval in time/);
+});
+
+
+test('collection transport failure retains the reference for reconciliation, with no retry', async (t) => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('connection reset'); });
+  await assert.rejects(lipapay.requestToPay({amountUGX:500,phone:'0750000000',orderId:'OFFLINE-001',network:'airtel'}),
+    (e) => e.paymentUncertain === true && e.referenceId === 'OFFLINE-001');
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+test('unverified acceptance is uncertain, not a second collection', async (t) => {
+  reply(t, signedAcceptance({ signature: '0'.repeat(32) }));
+  await assert.rejects(lipapay.requestToPay({amountUGX:500,phone:'0750000000',orderId:'OFFLINE-001',network:'airtel'}),
+    {code:'LIPAPAY_BAD_RECEIPT',paymentUncertain:true,referenceId:'OFFLINE-001'});
+});
+
+test('an acceptance for a different reference cannot confirm this request', async (t) => {
+  reply(t, signedAcceptance({reference:'DIFFERENT-001'}));
+  await assert.rejects(lipapay.requestToPay({amountUGX:500,phone:'0750000000',orderId:'OFFLINE-001',network:'airtel'}),
+    {code:'LIPAPAY_BAD_RECEIPT',paymentUncertain:true});
+});
+
+test('signed status for another order cannot settle the requested order', async (t) => {
+  reply(t, signedResult({status:1}));
+  await assert.rejects(lipapay.getPaymentResult('DIFFERENT-001'), {code:'LIPAPAY_WRONG_REFERENCE'});
+});
+
+test('reject malformed amounts, invalid references and network mismatches before sending', async (t) => {
+  const fetch = t.mock.method(globalThis,'fetch',()=>{throw Error('must not send');});
+  const base={amountUGX:500,phone:'0750000000',orderId:'OFFLINE-001',network:'airtel'};
+  for (const changes of [{amountUGX:500.5},{amountUGX:Infinity},{orderId:'bad/ref'},{phone:'0770000000'},{phone:'075abc0000000'}]) {
+    await assert.rejects(lipapay.requestToPay({...base,...changes}));
+  }
+  assert.equal(fetch.mock.callCount(),0);
+});
+
+test('every provider call has a bounded timeout signal', async (t) => {
+  let signal;
+  t.mock.method(globalThis,'fetch', async (_,init)=>{signal=init.signal;return new Response(signedResult());});
+  await lipapay.getPaymentStatus('OFFLINE-001');
+  assert.ok(signal instanceof AbortSignal);
+});
+
+
+test('a channel-side server error cannot be treated as definitely unsent', async (t) => {
+  reply(t, JSON.stringify({Succeeded:false,StatusCode:502,Errors:'Channel provider error'}));
+  await assert.rejects(lipapay.requestToPay({amountUGX:500,phone:'0750000000',orderId:'OFFLINE-001',network:'airtel'}),
+    {code:'LIPAPAY_REQUEST_FAILED',paymentUncertain:true,referenceId:'OFFLINE-001'});
+});
+
+test('MTN collections preserve channel one and the same verified receipt contract', async (t) => {
+  let channel;
+  t.mock.method(globalThis,'fetch',async(_,init)=>{channel=JSON.parse(init.body).Channel;return new Response(signedAcceptance());});
+  t.mock.method(console,'info',()=>{});
+  const result=await lipapay.requestToPay({amountUGX:500,phone:'0770000000',orderId:'OFFLINE-001',network:'mtn'});
+  assert.equal(channel,1);assert.equal(result.status,'PENDING');
 });

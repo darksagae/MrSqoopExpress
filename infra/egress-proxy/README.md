@@ -28,3 +28,20 @@ second argument to `render-cloud-init.mjs` (see `../voice-server/README.md`).
 - `EGRESS_PROXY_AUTH` = contents of `password`
 - `EGRESS_PROXY_CA` = contents of `proxy.crt`
 - Send LipaPay the server IP to whitelist.
+
+## Update an existing VPS
+
+Run `./deploy.sh root@<vps-ip>` from this directory with the existing SSH key
+loaded. The updater checks Node syntax, backs up `/opt/egress/proxy.cjs`,
+restarts `egress`, and checks the pinned-certificate health endpoint and
+`X-Egress-Revision` against the deployed source hash. It restores the previous
+source if the restart or health check fails. The existing environment file,
+password, certificates, IP address, and destination allowlist are retained.
+
+The proxy is a CONNECT tunnel; Airtel request signing and the LipaPay API client
+run in the Vercel `shop` project. Proxy credentials authorize tunnelling, not
+SSH deployment. Updating a running VPS requires SSH access or a Vultr console
+session in addition to the Vercel credentials.
+
+Run the proxy regression suite with
+`node --test infra/egress-proxy/tests/proxy.test.mjs` from the repository root.

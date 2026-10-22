@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:payments": "node --test tests/payments.test.mjs"
+    "test:payments": "node --test tests/payments.test.mjs tests/checkout-initiation.test.mjs"
   },
   "keywords": [],
   "author": "",

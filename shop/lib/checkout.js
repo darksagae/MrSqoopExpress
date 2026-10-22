@@ -121,6 +121,7 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
   }
 
   let reference;
+  let initiationUncertain = false;
   try {
     const result = await provider.requestToPay({
       amountUGX,
@@ -136,10 +137,15 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
     // error.code names the processor (LIPAPAY_*). Keep it server-side; the
     // customer gets a generic code they could quote to support.
     console.error('Payment initiation failed:', orderId, error.code, error.message);
-    await failUnsentOrder(orderId, `REQUEST_FAILED ${error.code || ''}`.trim()).catch((e) =>
-      console.error('Could not close unsent order', orderId, e.message)
-    );
-    return { status: 502, body: { error: 'Could not start the mobile-money payment. Please try again.', code: 'PAYMENT_ERROR' } };
+    if (error.paymentUncertain && error.referenceId === orderId) {
+      reference = orderId;
+      initiationUncertain = true;
+    } else {
+      await failUnsentOrder(orderId, `REQUEST_FAILED ${error.code || ''}`.trim()).catch((e) =>
+        console.error('Could not close unsent order', orderId, e.message)
+      );
+      return { status: 502, body: { error: 'Could not start the mobile-money payment. Please try again.', code: 'PAYMENT_ERROR' } };
+    }
   }
 
   try {
@@ -164,7 +170,7 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
   // has not entered their PIN yet. Stay pending; the caller polls
   // checkPaymentStatus until the provider resolves it.
   return {
-    status: 200,
+    status: initiationUncertain ? 202 : 200,
     body: {
       success: true,
       orderId,
@@ -172,7 +178,10 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
       network,
       reference,
       amountUGX,
-      message: `Approve the payment prompt on your phone (${customer.phone}) to complete your order.`,
+      requestUncertain: initiationUncertain,
+      message: initiationUncertain
+        ? 'We are checking whether your payment request was accepted. Do not submit another payment while we check.'
+        : `Approve the payment prompt on your phone (${customer.phone}) to complete your order.`,
     },
   };
 }

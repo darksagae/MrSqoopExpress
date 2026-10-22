@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useCart } from './cart';
 import { track } from '@/lib/meta-pixel';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES, categorySlug } from '@/lib/categories';
 import { thumb } from '@/lib/thumb';
 import { listings } from '@/lib/listing-cache';
 import PromoBanner from './components/PromoBanner';
@@ -115,6 +115,7 @@ function ProductCard({ p, onAdd, eager = false }) {
  * the default view appears with no request at all.
  */
 function useFeed(query, initial) {
+  const pageSize = initial?.pageSize || PAGE_SIZE;
   const [items, setItems] = useState(initial?.products ?? []);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initial ? initial.hasMore : true);
@@ -128,17 +129,27 @@ function useFeed(query, initial) {
   const urlFor = useCallback(
     (n) =>
       query
-        ? `/api/products?keyword=${encodeURIComponent(query)}&page=${n}&limit=${PAGE_SIZE}&preview=1`
+        ? `/api/products?keyword=${encodeURIComponent(query)}&page=${n}&limit=${pageSize}&preview=1`
         : `/api/trending?page=${n}&limit=${PAGE_SIZE}`,
-    [query]
+    [query, pageSize]
   );
 
   useEffect(() => {
     // The first render already holds the pre-rendered best picks.
-    if (seeded.current && !query) {
+    if (seeded.current && initial) {
       listings.write(urlFor(1), initial);
       seeded.current = false;
-      return undefined;
+      if (!query) return undefined;
+      // Static category HTML is immediately usable; refresh its listing without
+      // replacing the cards with placeholders or blocking the first render.
+      let cancelled = false;
+      listings.load(urlFor(1)).then((data) => {
+        if (!cancelled && data.products.length) {
+          setItems(data.products);
+          setHasMore(Boolean(data.hasMore));
+        }
+      }).catch(() => { /* retain the server-rendered products */ });
+      return () => { cancelled = true; };
     }
     seeded.current = false;
 
@@ -207,8 +218,11 @@ function subscribeUrl(cb) {
     window.removeEventListener('mse:url', cb);
   };
 }
-const readQuery = () => new URLSearchParams(window.location.search).get('q') || '';
-const serverQuery = () => '';
+const readQuery = () => {
+  const slug = window.location.pathname.match(/^\/category\/([^/]+)\/?$/)?.[1];
+  return CATEGORIES.find((category) => categorySlug(category) === slug)?.keyword
+    || new URLSearchParams(window.location.search).get('q') || '';
+};
 
 // Recent searches belong to one person. Signed in, they are kept on this
 // device under that account only, so someone else signing in on the same phone
@@ -387,7 +401,7 @@ function CategoryRow({ cat, onAdd, onViewAll, onImage }) {
   );
 }
 
-export default function HomeClient({ initial = null }) {
+export default function HomeClient({ initial = null, initialQuery = '', categoryTitle = '' }) {
   // Real supplier product imagery for the category tiles, fetched once.
   const [catImages, setCatImages] = useState({});
   const rememberCategoryImage = useCallback((keyword, products) => {
@@ -398,9 +412,9 @@ export default function HomeClient({ initial = null }) {
   // the default view: whatever AliExpress ranks as best selling.
   // The submitted search lives in the URL (/?q=shoes) rather than in memory, so
   // opening a product and pressing Back returns to the same results.
-  const query = useSyncExternalStore(subscribeUrl, readQuery, serverQuery).trim();
+  const query = useSyncExternalStore(subscribeUrl, readQuery, () => initialQuery).trim();
   const [keyword, setKeyword] = useState(query);
-  const feed = useFeed(query, query ? null : initial);
+  const feed = useFeed(query, query === initialQuery ? initial : null);
   const [recent, setRecent] = useState([]);
   const [focused, setFocused] = useState(false);
   const scrollRestored = useRef(false);
@@ -437,8 +451,13 @@ export default function HomeClient({ initial = null }) {
     setFocused(false);
     scrollRestored.current = true; // a new search starts at the top
     jumpToResults.current = true;
-    window.history.pushState(null, '', clean ? `/?q=${encodeURIComponent(clean)}` : '/');
-    window.dispatchEvent(new Event('mse:url'));
+    const category = CATEGORIES.find((category) => category.keyword === clean);
+    const href = category ? `/category/${categorySlug(category)}` : clean ? `/?q=${encodeURIComponent(clean)}` : '/';
+    if (category || window.location.pathname !== '/') router.push(href);
+    else {
+      window.history.pushState(null, '', href);
+      window.dispatchEvent(new Event('mse:url'));
+    }
   };
   const rowRef = useRef(null);
   // Only the round category navigation moves automatically.
@@ -545,7 +564,7 @@ export default function HomeClient({ initial = null }) {
     <>
       {/* The page's H1: what the shop is. Read by search engines and screen
           readers; the hero banner below is what shoppers see. */}
-      <h1 className="sr-only">Shop Online. Get Your Orders Delivered to Uganda. You shop. We ship. You smile.</h1>
+      <h1 className="sr-only">{categoryTitle ? `${categoryTitle} — Shop Online in Uganda` : 'Shop Online. Get Your Orders Delivered to Uganda. You shop. We ship. You smile.'}</h1>
 
       {/* ===== Search bar ===== */}
       <div className="top-search">

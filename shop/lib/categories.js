@@ -42,3 +42,7 @@ export const HERO_TRENDING_KEYWORDS = [
   'top rated',
   'must have',
 ];
+
+export function categorySlug(category) {
+  return category.label.toLowerCase().replace(/&/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}

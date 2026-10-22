@@ -236,6 +236,65 @@ function writeRecent(list) {
   try { recentStore().setItem(recentKey(), JSON.stringify(list)); } catch { /* storage blocked */ }
 }
 
+/**
+ * Gentle motion for a row of products: it drifts sideways by itself while it is
+ * on screen and turns back at each end. It stops as soon as someone touches,
+ * hovers or scrolls it, resumes a few seconds after they let go, and does
+ * nothing for people whose device asks for reduced motion.
+ */
+function useDrift(ref, { reverse = false, active = true, speed = 24 } = {}) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !active || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined;
+    let raf = 0;
+    let visible = false;
+    let dir = reverse ? -1 : 1;
+    let pausedUntil = performance.now() + 1200;
+    let last = performance.now();
+    let pos = el.scrollLeft;
+    // The position we last set. Browsers round scrollLeft to whole pixels, and
+    // reading that back each frame would make it move a whole pixel per frame,
+    // far faster than asked, so only a scroll that is not our own is adopted.
+    let mine = pos;
+    const SPEED = speed; // pixels per second
+    const hold = (ms = 4000) => { pausedUntil = performance.now() + ms; pos = el.scrollLeft; };
+    const tick = (now) => {
+      const dt = Math.min(now - last, 64) / 1000;
+      last = now;
+      const max = el.scrollWidth - el.clientWidth;
+      if (visible && max > 4 && now > pausedUntil && !document.hidden) {
+        if (dir < 0 && pos === 0 && el.scrollLeft === 0) { pos = max; el.scrollLeft = max; }
+        pos += dir * SPEED * dt;
+        if (pos >= max) { pos = max; dir = -1; pausedUntil = now + 1200; }
+        else if (pos <= 0) { pos = 0; dir = 1; pausedUntil = now + 1200; }
+        el.scrollLeft = pos;
+        mine = el.scrollLeft;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    const onScroll = () => {
+      if (Math.abs(el.scrollLeft - mine) > 1.5 && performance.now() > pausedUntil - 3900) pos = el.scrollLeft;
+    };
+    const stops = ['pointerdown', 'touchstart', 'wheel', 'mouseenter', 'focusin'];
+    const stop = () => hold();
+    stops.forEach((e) => el.addEventListener(e, stop, { passive: true }));
+    const leave = () => hold(1200);
+    el.addEventListener('mouseleave', leave, { passive: true });
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const io = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(
+      (entries) => { visible = entries.some((e) => e.isIntersecting); }, { threshold: 0.2 });
+    if (io) io.observe(el); else visible = true;
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      io?.disconnect();
+      stops.forEach((e) => el.removeEventListener(e, stop));
+      el.removeEventListener('mouseleave', leave);
+      el.removeEventListener('scroll', onScroll);
+    };
+  }, [ref, reverse, active, speed]);
+}
+
 // Rows are fetched one or two at a time. Opening all thirteen at once made the
 // supplier throttle us, so rows came back empty and vanished.
 const rowQueue = [];
@@ -386,6 +445,9 @@ export default function HomeClient({ initial = null }) {
     window.dispatchEvent(new Event('mse:url'));
   };
   const rowRef = useRef(null);
+  // Only the round category navigation moves automatically.
+  const stripRef = useRef(null);
+  useDrift(stripRef, { speed: 32 });
 
   const { add, setOpen } = useCart();
   const router = useRouter();
@@ -528,7 +590,7 @@ export default function HomeClient({ initial = null }) {
 
       {/* ===== Categories: one row of round icons ===== */}
       <section className="section cat-section" id="categories" aria-label="Categories">
-        <div className="cat-strip">
+        <div className="cat-strip" ref={stripRef}>
           {CATEGORIES.map((cat) => (
             <button
               type="button"

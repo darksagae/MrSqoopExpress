@@ -12,7 +12,7 @@ const SITE = 'https://www.mrsqoopexpress.com';
 export const metadata = {
   metadataBase: new URL(SITE),
   title: {
-    default: 'Mr Sqoop Express | Online Shopping & Delivery in Uganda',
+    default: 'Online Shopping & Delivery to Uganda',
     template: '%s | Mr Sqoop Express',
   },
   description:
@@ -22,12 +22,12 @@ export const metadata = {
     type: 'website',
     siteName: 'Mr Sqoop Express',
     url: SITE,
-    title: 'Mr Sqoop Express | Online Shopping & Delivery in Uganda',
+    title: 'Online Shopping & Delivery to Uganda',
     description:
       'Shop from international stores and get your orders delivered to Uganda, with easy order tracking and mobile money or card payment.',
     locale: 'en_UG',
   },
-  twitter: { card: 'summary' },
+  twitter: { card: 'summary_large_image', title: 'Online Shopping & Delivery to Uganda' },
   alternates: { canonical: '/' },
 };
 
@@ -40,6 +40,7 @@ const jsonLd = {
       name: 'Mr Sqoop Express',
       url: SITE,
       slogan: 'You shop. We ship. You smile.',
+      logo: `${SITE}/logo-white.png`,
       areaServed: { '@type': 'Country', name: 'Uganda' },
       email: 'support@mrsqoopexpress.com',
     },

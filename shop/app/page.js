@@ -9,7 +9,7 @@ import { getBestPicks } from '@/lib/best-picks';
 export const revalidate = 1800;
 
 export const metadata = {
-  title: { absolute: 'Mr Sqoop Express | Online Shopping & Delivery in Uganda' },
+  title: { absolute: 'Online Shopping & Delivery to Uganda' },
   description:
     'Shop online with Mr Sqoop Express and get your orders delivered to Uganda. Shop from international stores, enjoy reliable shipping and easy order tracking.',
   alternates: { canonical: '/' },

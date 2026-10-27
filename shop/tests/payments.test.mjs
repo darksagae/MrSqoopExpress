@@ -37,15 +37,16 @@ function signedAcceptance({ reference = 'OFFLINE-001', signature = null } = {}) 
   return `{"Succeeded":true,"StatusCode":200,"Data":{${fields.join(',')},"Sign":"${sign}"}}`;
 }
 
+const walletQuote = () => JSON.stringify({Succeeded:true,StatusCode:200,Data:{FullName:'MARK ISAGALA'}});
 function reply(t, body) {
-  t.mock.method(globalThis, 'fetch', async () => new Response(body));
+  t.mock.method(globalThis, 'fetch', async (url) => new Response(url.endsWith('/bill') ? walletQuote() : body));
 }
 
 test('Airtel request uses channel 2, local phone and cents for all supported input formats', async (t) => {
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {
     calls.push({url, body:JSON.parse(init.body)});
-    return new Response(signedAcceptance());
+    return new Response(url.endsWith('/bill') ? walletQuote() : signedAcceptance());
   });
   t.mock.method(console, 'info', () => {});
   for (const phone of ['0750000000', '750000000', '+256 750 000 000']) {
@@ -55,7 +56,7 @@ test('Airtel request uses channel 2, local phone and cents for all supported inp
     assert.deepEqual(fields, {
       Version:'v1.0', MchID:2, TimeStamp:fields.TimeStamp, Channel:2,
       OutTradeNo:'OFFLINE-001', Amount:50000, TransactionType:1,
-      TraderID:'0750000000', TraderFullName:'NONEEDMATCHNAMES',
+      TraderID:'0750000000', TraderFullName:'MARK ISAGALA',
       Description:'MrSqoopExpress OFFLINE-001', NotifyUrl:'https://example.test/callback',
     });
     const base = Object.entries(fields).map(([k,v]) => `${k}=${v}`).join('&');
@@ -113,10 +114,10 @@ test('missing Airtel transaction is not blamed on an unanswered PIN prompt', () 
 
 
 test('collection transport failure retains the reference for reconciliation, with no retry', async (t) => {
-  const fetch = t.mock.method(globalThis, 'fetch', async () => { throw new Error('connection reset'); });
+  const fetch = t.mock.method(globalThis, 'fetch', async (url) => { if(url.endsWith('/bill')) return new Response(walletQuote()); throw new Error('connection reset'); });
   await assert.rejects(lipapay.requestToPay({amountUGX:500,phone:'0750000000',orderId:'OFFLINE-001',network:'airtel'}),
     (e) => e.paymentUncertain === true && e.referenceId === 'OFFLINE-001');
-  assert.equal(fetch.mock.callCount(), 1);
+  assert.equal(fetch.mock.callCount(), 2);
 });
 
 test('unverified acceptance is uncertain, not a second collection', async (t) => {
@@ -165,4 +166,22 @@ test('MTN collections preserve channel one and the same verified receipt contrac
   t.mock.method(console,'info',()=>{});
   const result=await lipapay.requestToPay({amountUGX:500,phone:'0770000000',orderId:'OFFLINE-001',network:'mtn'});
   assert.equal(channel,1);assert.equal(result.status,'PENDING');
+});
+
+for (const quote of [{Succeeded:false,StatusCode:400,Errors:'Unknown wallet'}, {Succeeded:true,StatusCode:200,Data:{}}]) {
+  test('failed or missing Airtel wallet name cannot initiate a collection: '+quote.Succeeded,async(t)=>{
+    const urls=[];
+    t.mock.method(globalThis,'fetch',async(url)=>{urls.push(url);return new Response(JSON.stringify(quote));});
+    await assert.rejects(lipapay.requestToPay({amountUGX:700,phone:'0705223777',orderId:'OFFLINE-001',network:'airtel'}),{code:'LIPAPAY_WALLET_LOOKUP_FAILED'});
+    assert.equal(urls.length,1);assert.ok(urls[0].endsWith('/bill'));
+  });
+}
+test('Airtel uses the provider wallet name in registered order and signs it before one collection',async(t)=>{
+  const calls=[];
+  t.mock.method(globalThis,'fetch',async(url,init)=>{calls.push({url,body:JSON.parse(init.body)});return new Response(url.endsWith('/bill')?walletQuote():signedAcceptance());});
+  t.mock.method(console,'info',()=>{});
+  await lipapay.requestToPay({amountUGX:700,phone:'0705223777',orderId:'OFFLINE-001',network:'airtel'});
+  assert.equal(calls.length,2);assert.equal(calls[0].body.Channel,2);
+  assert.equal(calls[1].body.TraderFullName,'MARK ISAGALA');assert.equal(calls[1].body.Amount,70000);
+  assert.equal(calls.filter(x=>x.url.endsWith('/unifiedorder')).length,1);
 });

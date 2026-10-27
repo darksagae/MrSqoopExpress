@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { getSql } from '@/lib/db';
 import { egressFetch, isEgressConfigured } from '@/lib/egress';
 import { collectionFields, normalizeWallet } from '@/lib/payments/lipapay-request';
-import { billEnquiry, getPaymentResult, orderDetails, verifySignature } from '@/lib/payments/lipapay';
+import { airtelWalletName, billEnquiry, getPaymentResult, orderDetails, verifySignature } from '@/lib/payments/lipapay';
 
 const reply = (data, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
@@ -44,6 +44,7 @@ export async function POST(request) {
       await sql`UPDATE payment_probes SET state='NOT_SUBMITTED',detail='Fee quote outside permitted limit',updated_at=now() WHERE id=${auth.id}`;
       return reply({ reference: auth.id, state: 'NOT_SUBMITTED', quotedDebitUGX: debit, error: 'Fee quote outside permitted limit.' }, 400);
     }
+    fields.TraderFullName = airtelWalletName(quote);
     // Retain the exact timestamp used for the actual collection, not the fee lookup.
     fields.TimeStamp = Math.floor(Date.now()/1000);
     const base = Object.entries(fields).filter(([,v])=>v!=='' && v!=null).map(([k,v])=>`${k}=${v}`).join('&');

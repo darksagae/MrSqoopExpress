@@ -170,6 +170,13 @@ function fail(json, fallbackCode) {
 export async function requestToPay({ amountUGX, phone, orderId, note, network }) {
   const fields = collectionFields({ merchantId: MCH_ID, notifyUrl: NOTIFY_URL,
     amountUGX, phone, orderId, note, network });
+  // Airtel name matching is order-sensitive. Resolve the registered wallet
+  // name instead of forwarding a delivery name or the bypass sentinel.
+  if (network === 'airtel') {
+    const quote = await billEnquiry({ phone: fields.TraderID, amountUGX, channel: 2 });
+    fields.TraderFullName = airtelWalletName(quote);
+    fields.TimeStamp = Math.floor(Date.now() / 1000);
+  }
   let response;
   try {
     response = await call('/api/pay/unifiedorder', fields);
@@ -215,6 +222,17 @@ export async function requestToPay({ amountUGX, phone, orderId, note, network })
     platformRef: json.Data?.TransactionId || null,
     status: 'PENDING',
   };
+}
+
+/** A failed or incomplete name enquiry must not initiate a collection. */
+export function airtelWalletName(quote) {
+  const name = typeof quote.data?.FullName === 'string' ? quote.data.FullName.trim() : '';
+  if (!quote.ok || !name || name.length > 50 || name === 'NONEEDMATCHNAMES') {
+    throw Object.assign(new Error('Airtel wallet name could not be verified before collection.'), {
+      code: 'LIPAPAY_WALLET_LOOKUP_FAILED',
+    });
+  }
+  return name;
 }
 
 /**

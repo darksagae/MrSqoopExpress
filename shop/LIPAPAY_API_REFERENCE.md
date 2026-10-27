@@ -445,9 +445,10 @@ under LipaPay's merchant name rather than ours. Support should expect
   doubles as the `payment_ref` we persist, and no schema change was needed.
 - Retries after a failure generate a fresh `orderId`, avoiding the `403 duplicate`
   that resubmitting the same `OutTradeNo` would cause.
-- `TraderFullName` is sent as `NONEEDMATCHNAMES`. Customers routinely type a name that
-  differs from the one registered on their wallet, and matching on it would reject
-  legitimate payments.
+- Airtel first calls `bill` with channel 2 and sends its registered `FullName` as
+  `TraderFullName`. Live name matching rejected `isagala mark` and required
+  `MARK ISAGALA`; delivery names must not determine the wallet name. A failed or
+  incomplete lookup prevents collection. MTN retains `NONEEDMATCHNAMES`.
 - `Channel` follows the customer's selection (MTN=1 / Airtel=2) rather than auto-detect,
   so a mismatch fails loudly instead of silently charging the other wallet.
 - The callback handler verifies the signature *and* re-confirms via `orderquery` before

@@ -1,3 +1,4 @@
+import { AIRTEL_MERCHANT_PREFIX, isAirtelMerchantRef } from './airtel-merchant.js';
 import { getSql } from '../db.js';
 import { currentSettings, loadSettings } from '../settings.js';
 import { ensureAccountColumns, getOrder, settlePayment } from '../orders.js';
@@ -38,19 +39,22 @@ export async function markCardClaimed(orderId, userId) {
   return rows.length > 0;
 }
 
-/** Card-link orders still waiting for the admin, the ones marked paid first. */
+/** Card-link and Airtel merchant orders waiting for review, customer claims first. */
 export async function listCardLinkPending({ days = 14 } = {}) {
   if (!(await ensureAccountColumns())) return [];
   const rows = await getSql()`
-    SELECT id, customer_name, customer_phone, customer_email, amount_ugx, items, created_at, card_claimed_at
+    SELECT id, customer_name, customer_phone, customer_email, amount_ugx, items, created_at, card_claimed_at, network, payment_ref
       FROM orders
-     WHERE payment_status = 'PENDING' AND payment_ref LIKE ${CARD_LINK_PREFIX + '%'}
+     WHERE payment_status = 'PENDING' AND (payment_ref LIKE ${CARD_LINK_PREFIX + '%'}
+        OR (network = 'airtel' AND payment_ref LIKE ${AIRTEL_MERCHANT_PREFIX + '%'}))
        AND created_at > now() - make_interval(days => ${days})
      ORDER BY card_claimed_at DESC NULLS LAST, created_at DESC
      LIMIT 100
   `;
   return rows.map((o) => ({
     orderId: o.id,
+    network: o.network,
+    method: isAirtelMerchantRef(o.payment_ref) ? 'airtel-merchant' : 'card-link',
     customerName: o.customer_name,
     phone: o.customer_phone,
     email: o.customer_email || null,
@@ -62,15 +66,16 @@ export async function listCardLinkPending({ days = 14 } = {}) {
 }
 
 /**
- * The admin's answer for one card-link order. Received settles it as paid,
+ * The admin's answer for one manual-payment order. Received settles it as paid,
  * which sends it on exactly like a Mobile Money payment.
  */
 export async function decideCardLink(orderId, received) {
   const order = await getOrder(orderId);
-  if (!order || !isCardLinkRef(order.payment_ref)) return { ok: false, error: 'No card payment waiting for that order.' };
+  const airtel = order?.network === 'airtel' && isAirtelMerchantRef(order?.payment_ref);
+  if (!order || (!isCardLinkRef(order.payment_ref) && !airtel)) return { ok: false, error: 'No manual payment waiting for that order.' };
   if (order.payment_status !== 'PENDING') return { ok: false, error: 'This order has already been decided.' };
   const { changed } = await settlePayment(order.payment_ref, received ? 'SUCCESSFUL' : 'FAILED', {
-    failureReason: received ? null : 'CARD_NOT_RECEIVED',
+    failureReason: received ? null : airtel ? 'AIRTEL_MERCHANT_NOT_RECEIVED' : 'CARD_NOT_RECEIVED',
   });
   return { ok: changed, error: changed ? null : 'This order has already been decided.' };
 }

@@ -61,6 +61,6 @@ export function resolveProvider(network) {
  */
 export function networkStatus() {
   return Object.fromEntries(
-    NETWORKS.map((n) => [n, { ready: resolveProvider(n).ready }])
+    NETWORKS.map((n) => [n, { ready: n === 'airtel' || resolveProvider(n).ready }])
   );
 }

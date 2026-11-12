@@ -22,7 +22,7 @@ export function CardPayments({ onDecided }: { onDecided: () => Promise<void> }) 
       setPayments(await fetchCardPayments())
       setError('')
     } catch (e) {
-      setError(plainError(e, 'Could not load card payments.'))
+      setError(plainError(e, 'Could not load payments.'))
     }
   }, [])
 
@@ -53,10 +53,10 @@ export function CardPayments({ onDecided }: { onDecided: () => Promise<void> }) 
   return (
     <section className="mt-8 rounded-2xl border border-[#E8B923]/60 bg-neutral-950 p-5">
       <h2 className="text-lg font-bold text-white">
-        Card payments to check {payments?.length ? <span className="text-neutral-400">({payments.length})</span> : null}
+        Payments to check {payments?.length ? <span className="text-neutral-400">({payments.length})</span> : null}
       </h2>
       <p className="mt-1 text-sm text-neutral-400">
-        Find a payment of exactly this amount in the Absa card portal, then mark it below.
+        Check the matching Airtel merchant or Absa card payment before marking an order paid.
       </p>
       {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
 
@@ -66,6 +66,7 @@ export function CardPayments({ onDecided }: { onDecided: () => Promise<void> }) 
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="font-bold text-white">#{p.orderId}</p>
+                <p className="text-sm font-semibold text-amber-300">{p.method === 'airtel-merchant' ? 'Airtel Money · merchant 4430722' : 'Bank card · Absa'}</p>
                 <p className="text-sm text-neutral-300">{p.customerName} · {p.phone}</p>
                 {p.email && <p className="text-xs text-neutral-500">{p.email}</p>}
               </div>
@@ -109,7 +110,7 @@ export function CardPayments({ onDecided }: { onDecided: () => Promise<void> }) 
 
       {asking && (
         <ConfirmDialog
-          title={asking.received ? 'Mark this card payment as received?' : 'Mark this card payment as not received?'}
+          title={asking.received ? 'Mark this payment as received?' : 'Mark this payment as not received?'}
           confirmLabel={asking.received ? 'Payment received' : 'Not received'}
           danger={!asking.received}
           busy={busy}
@@ -118,7 +119,7 @@ export function CardPayments({ onDecided }: { onDecided: () => Promise<void> }) 
         >
           {asking.received ? (
             <p>
-              Only if the Absa portal shows a payment of exactly{' '}
+              Only if {asking.payment.method === 'airtel-merchant' ? 'the Airtel merchant account shows' : 'the Absa portal shows'} a payment from this customer of exactly{' '}
               <strong className="text-white">{formatUgx(asking.payment.amountUGX)}</strong> for order{' '}
               {asking.payment.orderId}. The order then goes ahead like any paid order.
             </p>

@@ -55,6 +55,9 @@ export default function CheckoutPage() {
   const [claiming, setClaiming] = useState(false);
   const [copied, setCopied] = useState(false);
   const isCardLink = done?.mode === 'link';
+  const isAirtelMerchant = done?.mode === 'airtel-merchant';
+  const isManualPayment = isCardLink || isAirtelMerchant;
+  const [merchantCopied, setMerchantCopied] = useState(false);
   // How card payment works right now (see /api/settings/public); Bank Card is
   // only offered when it can actually be paid.
   const [cardMode, setCardMode] = useState(null);
@@ -170,12 +173,12 @@ export default function CheckoutPage() {
     if (payStatus && payStatus !== 'PENDING') return;
     // A card-link payment is checked by the admin; start watching once the
     // customer says they've paid, and keep watching for longer.
-    if (done.mode === 'link' && !cardClaimed) return;
+    if (['link', 'airtel-merchant'].includes(done.mode) && !cardClaimed) return;
 
     let cancelled = false;
     let attempts = 0;
-    const MAX_ATTEMPTS = done.mode === 'link' ? 200 : 40; // ~20 min at 6s, ~2 min at 3s
-    const GAP_MS = done.mode === 'link' ? 6000 : 3000;
+    const MAX_ATTEMPTS = ['link', 'airtel-merchant'].includes(done.mode) ? 200 : 40; // ~20 min at 6s, ~2 min at 3s
+    const GAP_MS = ['link', 'airtel-merchant'].includes(done.mode) ? 6000 : 3000;
 
     const tick = async () => {
       if (cancelled) return;
@@ -209,16 +212,29 @@ export default function CheckoutPage() {
   const claimCardPayment = async () => {
     setClaiming(true);
     try {
-      await fetch('/api/payments/card/claim', {
+      const response = await fetch(isAirtelMerchant ? '/api/payments/airtel/claim' : '/api/payments/card/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId: done.orderId }),
       });
+      if (!response.ok) throw new Error('Could not record your payment notification. Please try again.');
+      setCardClaimed(true);
+      setError(null);
     } catch {
-      // The admin still sees the order; the flag only puts it first in the list.
+      setError('Could not record your payment notification. Please try again.');
+    } finally {
+      setClaiming(false);
     }
-    setCardClaimed(true);
-    setClaiming(false);
+  };
+
+  const copyMerchant = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setMerchantCopied(true);
+      setTimeout(() => setMerchantCopied(false), 2000);
+    } catch {
+      // The merchant code remains selectable when clipboard permission is blocked.
+    }
   };
 
   const copyAmount = async () => {
@@ -314,6 +330,10 @@ export default function CheckoutPage() {
       // Keep the cart until the money actually lands — if the customer declines
       // the prompt or it times out, they need their items to retry.
       setDone(data);
+      if (data.mode === 'airtel-merchant') {
+        await copyMerchant(data.merchantCode);
+        window.location.href = `tel:${data.ussd.replace(/#/g, '%23')}`;
+      }
     } catch (err) {
       setError('Network error — please try again. ' + err.message);
     } finally {
@@ -323,6 +343,38 @@ export default function CheckoutPage() {
 
   // Request accepted by the provider. Whether it was *paid* is a separate
   // question, answered by the poll above — don't claim success before then.
+  if (done && isAirtelMerchant && !cardClaimed) {
+    return (
+      <div className="co-done co-cardlink co-airtel-merchant">
+        <h1>Pay with Airtel Money</h1>
+        <p className="co-order-id">Order {done.orderId}</p>
+        <p>Dial <a href={`tel:${done.ussd.replace(/#/g, '%23')}`}><strong>{done.ussd}</strong></a> and pay with these details:</p>
+        <div className="co-merchant-detail"><span>Merchant code</span>
+          <div className="co-pay-amount"><strong>{done.merchantCode}</strong>
+            <button type="button" onClick={() => void copyMerchant(done.merchantCode)}>{merchantCopied ? 'Code copied ✓' : 'Copy merchant code'}</button>
+          </div>
+        </div>
+        <div className="co-merchant-detail"><span>Exact order amount</span>
+          <div className="co-pay-amount"><strong>{fmt(done.amountUGX)}</strong>
+            <button type="button" onClick={() => void copyAmount()}>{copied ? 'Amount copied ✓' : 'Copy amount'}</button>
+          </div>
+        </div>
+        <ol className="co-pay-steps">
+          <li>Dial <strong>{done.ussd}</strong> on the phone with your Airtel Money account.</li>
+          <li>Enter merchant code <strong>{done.merchantCode}</strong>.</li>
+          <li>Enter exactly <strong>{fmt(done.amountUGX)}</strong> and confirm the merchant details on your phone.</li>
+          <li>Complete the payment on your phone, then return here and tap <strong>I’ve paid</strong>.</li>
+        </ol>
+        <div className="co-done-actions">
+          <a className="btn-dark co-continue" href={`tel:${done.ussd.replace(/#/g, '%23')}`}>Open Airtel dialler</a>
+          <button type="button" className="co-continue co-continue-alt" disabled={claiming} onClick={() => void claimCardPayment()}>{claiming ? 'One moment…' : 'I’ve paid'}</button>
+        </div>
+        {error && <p role="alert" className="co-error">{error}</p>}
+        <p className="co-muted">Your order stays pending until we verify your merchant payment. Keep your Airtel transaction confirmation. Never enter your PIN on this website.</p>
+      </div>
+    );
+  }
+
   if (done && isCardLink && !cardClaimed) {
     return (
       <div className="co-done co-cardlink">
@@ -367,12 +419,12 @@ export default function CheckoutPage() {
         <h1>
           {paid
             ? done.test ? 'Test Order Placed' : 'Payment Received'
-            : rejected ? 'Payment Not Completed' : isCardLink ? 'Confirming Your Card Payment'
+            : rejected ? 'Payment Not Completed' : isManualPayment ? isAirtelMerchant ? 'Confirming Your Airtel Payment' : 'Confirming Your Card Payment'
               : done.requestUncertain ? 'Checking Your Payment Request' : 'Waiting for Your Approval'}
         </h1>
         <p className="co-order-id">Order {done.orderId}</p>
 
-        {waiting && !isCardLink && (
+        {waiting && !isManualPayment && (
           <>
             <p>{done.message}</p>
             <p className="co-muted">
@@ -382,7 +434,7 @@ export default function CheckoutPage() {
             </p>
           </>
         )}
-        {waiting && isCardLink && (
+        {waiting && isManualPayment && (
           <>
             <p>Thank you. We’re checking for your payment of {fmt(done.amountUGX)}.</p>
             <p className="co-muted">
@@ -408,18 +460,18 @@ export default function CheckoutPage() {
             <p>The payment was not completed, so your order hasn’t been placed.</p>
             {payReason && <p>{payReason}</p>}
             <p className="co-muted">
-              {isCardLink ? 'Your items are still in your cart.' : 'Nothing has been charged. You can try again from your cart.'}
+              {isManualPayment ? 'Your items are still in your cart.' : 'Nothing has been charged. You can try again from your cart.'}
             </p>
           </>
         )}
 
-        {payStatus === 'TIMEOUT' && isCardLink && (
+        {payStatus === 'TIMEOUT' && isManualPayment && (
           <>
-            <p>We’re still checking for your card payment of {fmt(done.amountUGX)}.</p>
+            <p>We’re still checking for your payment of {fmt(done.amountUGX)}.</p>
             <p className="co-muted">We’ll email you once it’s confirmed. Please don’t pay again.</p>
           </>
         )}
-        {payStatus === 'TIMEOUT' && !isCardLink && (
+        {payStatus === 'TIMEOUT' && !isManualPayment && (
           <>
             <p>We haven’t heard back from your network yet.</p>
             <p className="co-muted">
@@ -516,14 +568,14 @@ export default function CheckoutPage() {
           <p className="co-note">
             {network === 'card'
               ? 'Pay with any Visa or Mastercard. You’ll enter your card details on a secure payment page — we never see or store your card number.'
-              : 'When you place the order, a payment prompt is sent to your phone. Approve it with your mobile-money PIN to confirm.'}
+              : network === 'airtel' ? 'Pay opens your Airtel dialler with *185*9#. Use merchant code 4430722 and the exact order amount shown after you place your order.' : 'When you place the order, a payment prompt is sent to your phone. Approve it with your mobile-money PIN to confirm.'}
           </p>
 
           {error && <div className="co-error">{error}</div>}
 
           <button className="btn-dark co-pay" disabled={submitting}>
             {submitting
-              ? network === 'card' ? 'Opening card payment…' : 'Sending prompt…'
+              ? network === 'card' ? 'Opening card payment…' : network === 'airtel' ? 'Preparing Airtel payment…' : 'Sending prompt…'
               : `Pay ${fmt(payTotal)}`}
           </button>
         </form>

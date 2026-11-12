@@ -3,7 +3,7 @@ import { isSettingsAdmin } from '@/lib/settings';
 import { decideCardLink, listCardLinkPending } from '@/lib/payments/card-link';
 
 /**
- * GET  /api/admin/card-link                      card payments waiting for a check
+ * GET  /api/admin/card-link                      manual card/Airtel payments waiting for a check
  * POST /api/admin/card-link { orderId, received } the admin's answer
  *
  * Called by the admin site (never the browser) with the shared ingest secret.
@@ -17,7 +17,7 @@ export async function GET(request) {
     return NextResponse.json({ payments: await listCardLinkPending() }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     console.error('[card-link] list failed', e.message);
-    return NextResponse.json({ error: 'Could not load card payments.' }, { status: 500 });
+    return NextResponse.json({ error: 'Could not load manual payments.' }, { status: 500 });
   }
 }
 

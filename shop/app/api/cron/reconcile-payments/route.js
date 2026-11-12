@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { listStalePending, listUnsynced, markSynced, settlePayment } from '@/lib/orders';
 import { syncOrderToTracking, isTrackingConfigured } from '@/lib/tracking';
 import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
+import { isAirtelMerchantRef } from '@/lib/payments/airtel-merchant';
 import { readPaymentResult } from '@/lib/payments/result';
 
 /**
@@ -26,7 +27,7 @@ export async function GET(request) {
   const results = [];
 
   for (const order of stale) {
-    if (!NETWORKS.includes(order.network)) continue;
+    if (!NETWORKS.includes(order.network) || isAirtelMerchantRef(order.payment_ref)) continue;
     const { provider, ready } = resolveProvider(order.network);
     if (!ready) continue;
 

@@ -2,6 +2,7 @@ import { resolveProvider, NETWORKS } from '@/lib/payments/resolve';
 import { createOrder, newOrderId, attachPaymentRef, failUnsentOrder, getOrderByRef, settlePayment } from '@/lib/orders';
 import { TEST_REF_PREFIX, isTestCheckout, isTestRef } from '@/lib/test-checkout';
 import { isCardLinkRef } from '@/lib/payments/card-link';
+import { airtelMerchantInstructions, isAirtelMerchantRef } from '@/lib/payments/airtel-merchant';
 import { confirmCartTotal } from '@/lib/pricing';
 import { detectNetwork } from '@/lib/payments/networks';
 import { readPaymentResult } from '@/lib/payments/result';
@@ -11,7 +12,7 @@ import { readPaymentResult } from '@/lib/payments/result';
  * Sqoop Assist, so an order placed by voice is priced, recorded and charged
  * exactly like one placed on the website.
  *
- * Initiates a mobile-money charge (MTN request-to-pay / Airtel USSD push).
+ * MTN initiates a payment prompt; Airtel creates a pending merchant-code payment.
  * Success means the provider accepted the request, not that it was paid: the
  * customer still has to approve the prompt on their handset with their PIN.
  * The order stays PENDING until the provider says otherwise. The total passed
@@ -53,7 +54,7 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
   const test = isTestCheckout(account);
 
   // Not connected yet — be honest, don't fake a charge.
-  if (!ready && !test) {
+  if (!ready && !test && network !== 'airtel') {
     // The variable names identify our payment processor, so they stay in the
     // logs rather than going back to the browser.
     console.error(`[PAYMENTS] ${network} not configured. Missing: ${missing.join(', ')}`);
@@ -118,6 +119,18 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
         message: 'Test order: no payment was taken.',
       },
     };
+  }
+
+  if (network === 'airtel') {
+    const payment = airtelMerchantInstructions(orderId, amountUGX);
+    try {
+      await attachPaymentRef(orderId, payment.reference);
+    } catch (error) {
+      console.error('[AIRTEL MERCHANT REF]', orderId, error.message);
+      return { status: 500, body: { error: 'Could not prepare your Airtel payment. Nothing has been requested. Please try again.' } };
+    }
+    return { status: 200, body: { success: true, orderId, network, status: 'pending', ...payment,
+      message: 'Pay with Airtel Money using the merchant code and exact amount below.' } };
   }
 
   let reference;
@@ -200,6 +213,14 @@ export async function startMobileMoneyOrder({ account, customer = {}, network, i
 export async function checkPaymentStatus(network, reference) {
   // A card payment through Absa's link is decided by the admin, so its outcome
   // is our own record (lib/payments/card-link.js).
+  if (isAirtelMerchantRef(reference)) {
+    if (network !== 'airtel') return { status: 400, body: { error: 'Payment method does not match.' } };
+    const order = await getOrderByRef(reference).catch(() => null);
+    if (!order || order.network !== 'airtel') return { status: 404, body: { error: 'Order not found.' } };
+    const status = order.payment_status;
+    return { status: 200, body: { reference, network, status,
+      settled: status === 'SUCCESSFUL' || status === 'FAILED', paid: status === 'SUCCESSFUL' } };
+  }
   if (network === 'card' && isCardLinkRef(reference)) {
     const order = await getOrderByRef(reference).catch(() => null);
     const status = order?.payment_status || 'PENDING';

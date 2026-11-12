@@ -17,6 +17,9 @@ export function explainFailure(network, reason) {
       : null;
   }
   const wallet = NETWORK_LABEL[network] || 'Your network';
+  if (network === 'airtel' && r === 'AIRTEL_MERCHANT_NOT_RECEIVED') {
+    return 'We could not match your Airtel merchant payment to this order. Contact support with your Airtel transaction confirmation if you paid.';
+  }
   if (/transaction not found|DP00800001025/i.test(r)) {
     return `${wallet} could not find the payment request. If no PIN prompt arrived, contact support with your order number so we can trace it.`;
   }

@@ -171,7 +171,9 @@ export async function placeOrder(account, { confirmation }) {
   );
   if (dup) {
     return {
-      speech: `I've already placed that order, ${dup.id}. Check your phone for the payment request.`,
+      speech: dup.payment_ref?.startsWith('AIRTELMERCHANT-')
+        ? `Your order ${dup.id} is already saved. Pay with Airtel by dialling *185*9#, using merchant code 4430722 and the exact order amount.`
+        : `I've already placed that order, ${dup.id}. Check your phone for the payment request.`,
       data: { orderId: dup.id, network: dup.network },
     };
   }
@@ -190,6 +192,13 @@ export async function placeOrder(account, { confirmation }) {
     return {
       speech: `Done. Your order ${b.orderId} is placed as a test order. No payment was taken, and it has gone to the admin for confirmation.`,
       data: { orderId: b.orderId, network: b.network, amountUGX: b.amountUGX },
+    };
+  }
+  if (result.status === 200 && b.mode === 'airtel-merchant') {
+    return {
+      speech: `Your order ${b.orderId} is saved and awaiting payment. Dial ${b.ussd} on your Airtel phone, enter merchant code ${b.merchantCode}, and pay exactly ${shillings(b.amountUGX)}. We will verify the merchant payment before preparing your order.`,
+      data: { orderId: b.orderId, network: b.network, amountUGX: b.amountUGX,
+        mode: b.mode, ussd: b.ussd, merchantCode: b.merchantCode, reference: b.reference },
     };
   }
   if (result.status === 200) {

@@ -1799,3 +1799,9 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
 
 /* The promo banner's wrapper keeps no space of its own when there is no promo. */
 .section.promo-wrap { padding-top: 14px; padding-bottom: 0; }
+
+.co-merchant-detail { margin: 12px 0; }
+.co-merchant-detail > span { display: block; font-size: 14px; color: #555; }
+.co-airtel-merchant .co-pay-amount { flex-wrap: wrap; justify-content: center; max-width: 100%; }
+.co-airtel-merchant > p a { color: inherit; }
+@media (max-width: 420px) { .co-airtel-merchant .co-pay-amount { font-size: 22px; } }

@@ -210,6 +210,8 @@ export interface ShopSettings {
 
 /** A card payment made through Absa's payment link, waiting for the operator to find it. */
 export interface CardPayment {
+  method?: 'airtel-merchant' | 'card-link'
+  network?: string
   orderId: string
   customerName: string
   phone: string

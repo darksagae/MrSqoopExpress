@@ -59,7 +59,7 @@ function Result() {
         ) : (
           orderId && outcome !== 'error' && (
             <a
-              href={`https://mrsqoopexpress.com/?order=${encodeURIComponent(orderId)}`}
+              href={`https://order.mrsqoopexpress.com/?order=${encodeURIComponent(orderId)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-dark co-continue"

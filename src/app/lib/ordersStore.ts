@@ -148,7 +148,8 @@ export function buildTimeline(order: Order): TrackingStepView[] {
       date = `Expected ${formatTimestamp(order.expectedDelivery)}`
     }
 
-    return { label, date, status }
+    return { label: index === 0 && order.source === 'shop' && order.paymentStatus !== 'SUCCESSFUL'
+      ? (order.paymentStatus === 'FAILED' ? 'Payment not completed' : 'Awaiting payment confirmation') : label, date, status }
   })
 }
 
@@ -161,7 +162,7 @@ export function buildOrderDetails(order: Order) {
     { label: 'Customer Name', value: order.customerName },
     { label: 'Website Shipped From', value: order.websiteShippedFrom },
     { label: 'Contact Detail', value: order.phone },
-    { label: 'Outstanding Billing', value: formatOutstandingBilling(order.billingUgx) },
+    { label: order.source === 'shop' ? 'Order Total' : 'Outstanding Billing', value: order.source === 'shop' ? formatUgx(order.billingUgx) : formatOutstandingBilling(order.billingUgx) },
   ]
 }
 

@@ -93,7 +93,7 @@ export async function sendOrderConfirmation(order) {
     </table>
     <p style="color:#555;font-size:14px;margin-top:16px">Paid with ${METHOD[order.network] || 'mobile money'}.</p>
     <p style="margin:28px 0;text-align:center">
-      <a href="${APP_URL}/account/orders" style="background:#111;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;display:inline-block">Track your order</a>
+      <a href="https://order.mrsqoopexpress.com/?order=${encodeURIComponent(order.id)}" style="background:#111;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;display:inline-block">Track your order</a>
     </p>
     <p style="color:#777;font-size:13px">Questions? Reply to this email or write to support@mrsqoopexpress.com and quote ${escapeHtml(order.id)}.</p>
   </div>`;

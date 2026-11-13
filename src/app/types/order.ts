@@ -49,6 +49,8 @@ export interface OrderReview {
 }
 
 export interface Order {
+  source?: 'shop'
+  paymentStatus?: string
   id: string
   trackingId: string
   customerName: string

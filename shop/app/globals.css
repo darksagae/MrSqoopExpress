@@ -1805,3 +1805,13 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
 .co-airtel-merchant .co-pay-amount { flex-wrap: wrap; justify-content: center; max-width: 100%; }
 .co-airtel-merchant > p a { color: inherit; }
 @media (max-width: 420px) { .co-airtel-merchant .co-pay-amount { font-size: 22px; } }
+
+/* Keep guest tracking visible beside the cart at every screen size. */
+.header-track { align-self:center; color:#111; font-size:14px; font-weight:600; text-decoration:underline; text-underline-offset:4px; white-space:nowrap; }
+@media(max-width:600px) {
+  .header { padding:10px 12px; grid-template-columns:40px 1fr auto; gap:10px; }
+  .header .logo { justify-self:center; }
+  .header .logo img { height:auto; width:clamp(95px,26vw,140px); }
+  .header .nav-right { gap:10px; align-items:center; }
+  .header-track { font-size:12px; }
+}

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react'
+import { FormEvent, useState, useEffect } from 'react'
 import { RotatingTextRing } from './RotatingTextRing'
 import { LogoHeader } from './LogoHeader'
 import { PartnersMarquee } from './PartnersMarquee'
@@ -104,8 +104,7 @@ export function TrackOrder() {
   const [loading, setLoading] = useState(false)
   const [order, setOrder] = useState<Order | null>(null)
 
-  const handleSubmit = async (event: FormEvent) => {
-    event.preventDefault()
+  const lookup = async (query: string) => {
     setLoading(true)
     setError('')
 
@@ -132,6 +131,16 @@ export function TrackOrder() {
     }
 
     setLoading(false)
+  }
+
+  useEffect(() => {
+    const initial = new URLSearchParams(window.location.search).get('order')?.trim()
+    if (initial) { setQuery(initial); void lookup(initial) }
+  }, [])
+
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    void lookup(query)
   }
 
   return (
@@ -165,7 +174,7 @@ export function TrackOrder() {
             <>
               <p className="mt-8 text-xl font-bold text-white">Order #{order.trackingId}</p>
 
-              <NotifyButton orderId={order.id} />
+              {order.source !== 'shop' && <NotifyButton orderId={order.id} />}
 
               <TrackingTimeline steps={buildTimeline(order)} />
 

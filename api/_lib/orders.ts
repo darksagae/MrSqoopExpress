@@ -256,8 +256,7 @@ export async function findOrderByQuery(query: string) {
 
       const orderDigits = order.phone.replace(/\D/g, '')
       return (
-        (digits.length >= 4 && orderDigits.endsWith(digits.slice(-9))) ||
-        orderDigits === digits
+        (/^\+?[\d\s()-]+$/.test(query.trim()) && /^(?:0|256)?7\d{8}$/.test(digits) && orderDigits.endsWith(digits.slice(-9)))
       )
     }) ?? null
   )

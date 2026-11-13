@@ -524,7 +524,7 @@ export default function Assistant({ embedded = false }) {
                     <em>{o.statusLabel}</em>
                   </div>
                 ))}
-                <Link href="/account/orders" className="sa-link" onClick={closeOnPhone}>See all orders →</Link>
+                <Link href="https://order.mrsqoopexpress.com" className="sa-link" onClick={closeOnPhone}>See all orders →</Link>
               </div>
             )}
 

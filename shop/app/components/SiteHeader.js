@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useCart } from '../cart';
 import MenuDrawer from './MenuDrawer';
 
 export default function SiteHeader() {
   const { count, setOpen } = useCart();
+  const { status } = useSession();
   const [menu, setMenu] = useState(false);
 
   return (
@@ -31,7 +33,7 @@ export default function SiteHeader() {
           <img src="/logo-black.png" alt="Mr Sqoop Express" width="600" height="266" />
         </Link>
         <div className="nav-right">
-          <a className="header-track" href="https://order.mrsqoopexpress.com">Track order</a>
+          <Link className="header-track" href={status === 'unauthenticated' ? 'https://order.mrsqoopexpress.com' : '/account/orders'}>Track order</Link>
           <button className="icon-btn cart-btn" onClick={() => setOpen(true)} aria-label={count > 0 ? `Open cart, ${count} ${count === 1 ? 'item' : 'items'}` : 'Open cart'}>
             <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 4h2.4l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h7.6a1.5 1.5 0 0 0 1.5-1.1L20 8H6.2" />

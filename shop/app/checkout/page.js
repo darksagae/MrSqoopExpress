@@ -484,7 +484,7 @@ export default function CheckoutPage() {
         <div className="co-done-actions">
           {!rejected && (
             <a
-              href={`https://order.mrsqoopexpress.com/?order=${encodeURIComponent(done.orderId)}`}
+              href={`/account/orders?order=${encodeURIComponent(done.orderId)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-dark co-continue"

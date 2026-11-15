@@ -54,7 +54,7 @@ export default function MenuDrawer({ open, onClose }) {
 
         <div className="menu-links">
           <Link href="/#shop" onClick={onClose}>Shop Now</Link>
-          <Link href="https://order.mrsqoopexpress.com" onClick={onClose}>Track Order</Link>
+          <Link href={user ? '/account/orders' : 'https://order.mrsqoopexpress.com'} onClick={onClose}>Track Order</Link>
         </div>
 
         <p className="menu-h">Categories</p>

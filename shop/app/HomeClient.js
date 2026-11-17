@@ -564,7 +564,7 @@ export default function HomeClient({ initial = null, initialQuery = '', category
     <>
       {/* The page's H1: what the shop is. Read by search engines and screen
           readers; the hero banner below is what shoppers see. */}
-      <h1 className="sr-only">{categoryTitle ? `${categoryTitle} — Shop Online in Uganda` : 'Shop Online. Get Your Orders Delivered to Uganda. You shop. We ship. You smile.'}</h1>
+      {!categoryTitle && <h1 className="sr-only">Shop Online. Get Your Orders Delivered to Uganda. You shop. We ship. You smile.</h1>}
 
       {/* ===== Search bar ===== */}
       <div className="top-search">
@@ -607,11 +607,11 @@ export default function HomeClient({ initial = null, initialQuery = '', category
       <section className="section cat-section" id="categories" aria-label="Categories">
         <div className="cat-strip" ref={stripRef}>
           {CATEGORIES.map((cat) => (
-            <button
-              type="button"
+            <Link
+              href={`/category/${categorySlug(cat)}`}
+              prefetch={false}
               key={cat.label}
               className={`cat-tile${query === cat.keyword ? ' is-active' : ''}`}
-              onClick={() => pickCategory(cat)}
             >
               <span className={`cat-tile-img${catImages[cat.keyword] ? '' : ' is-empty'}`}>
                 {catImages[cat.keyword] && (
@@ -619,7 +619,7 @@ export default function HomeClient({ initial = null, initialQuery = '', category
                 )}
               </span>
               <span className="cat-tile-label">{cat.label}</span>
-            </button>
+            </Link>
           ))}
         </div>
       </section>

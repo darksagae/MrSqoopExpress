@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { CATEGORIES } from '@/lib/categories';
+import { CATEGORIES, categorySlug } from '@/lib/categories';
 
 /**
  * The menu behind the header's menu button: where to go, the account, and the
@@ -60,7 +60,7 @@ export default function MenuDrawer({ open, onClose }) {
         <p className="menu-h">Categories</p>
         <div className="menu-links">
           {CATEGORIES.map((c) => (
-            <a key={c.keyword} href={`/?q=${encodeURIComponent(c.keyword)}#shop`}>{c.label}</a>
+            <Link key={c.keyword} href={`/category/${categorySlug(c)}`} prefetch={false} onClick={onClose}>{c.label}</Link>
           ))}
         </div>
 

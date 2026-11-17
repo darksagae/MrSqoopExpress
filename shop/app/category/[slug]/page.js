@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import HomeClient from '../../HomeClient';
 import { CATEGORIES, categorySlug } from '@/lib/categories';
@@ -31,5 +32,19 @@ export default async function CategoryPage({ params }) {
     products: priceProducts(cached, []).map((product) => ({ ...product, skuId: null })),
     hasMore: true, pageSize: 10,
   } : null;
-  return <HomeClient initial={initial} initialQuery={category.keyword} categoryTitle={category.label} />;
+  const url = `https://www.mrsqoopexpress.com/category/${categorySlug(category)}`;
+  const breadcrumbs = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.mrsqoopexpress.com/' },
+    { '@type': 'ListItem', position: 2, name: category.label, item: url },
+  ] };
+  return <>
+    <section className="section category-intro">
+      <nav className="category-breadcrumb" aria-label="Breadcrumb"><Link href="/">Home</Link><span aria-hidden="true">/</span><span aria-current="page">{category.label}</span></nav>
+      <h1>{category.label} — Shop Online in Uganda</h1>
+      <p>Browse {category.label.toLowerCase()} from international suppliers with Mr Sqoop Express. View prices in Uganda shillings and check each product’s available options, shipping cost and delivery window to Uganda before ordering.</p>
+    </section>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbs).replace(/</g, '\\u003c') }} />
+    <HomeClient initial={initial} initialQuery={category.keyword} categoryTitle={category.label} />
+  </>;
+
 }

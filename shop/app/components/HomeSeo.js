@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { CATEGORIES, categorySlug } from '@/lib/categories';
 
 const WHY = [
   ['International shopping', 'Browse thousands of products from trusted international suppliers, priced in Uganda shillings.'],
@@ -20,6 +21,14 @@ const STEPS = [
 export default function HomeSeo() {
   return (
     <>
+      <nav className="section seo-block" aria-labelledby="browse-categories-title">
+        <h2 id="browse-categories-title" className="section-title">Shop by category</h2>
+        <ul className="category-directory">
+          {CATEGORIES.map(category => (
+            <li key={category.keyword}><Link href={`/category/${categorySlug(category)}`} prefetch={false}>{category.label}</Link></li>
+          ))}
+        </ul>
+      </nav>
       <section className="section seo-block" aria-labelledby="why-title">
         <h2 id="why-title" className="section-title">Why shop with Mr Sqoop Express?</h2>
         <ul className="seo-grid">

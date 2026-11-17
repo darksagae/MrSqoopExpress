@@ -1815,3 +1815,11 @@ button.pd-back { background: none; border: 0; font: inherit; cursor: pointer; }
   .header .nav-right { gap:10px; align-items:center; }
   .header-track { font-size:12px; }
 }
+
+/* Persistent category links complement the moving category strip. */
+.category-directory { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px 24px; list-style: none; padding: 0; }
+.category-directory a { text-decoration: underline; text-underline-offset: 4px; font-weight: 600; }
+.category-intro { margin-top: 24px; }
+.category-intro h1 { font-size: clamp(24px, 4vw, 36px); margin: 16px 0 12px; }
+.category-intro p { color: #555; line-height: 1.6; max-width: 760px; }
+.category-breadcrumb { display: flex; gap: 8px; font-size: 14px; }

@@ -50,14 +50,14 @@ test('Airtel request uses channel 2, local phone and cents for all supported inp
   });
   t.mock.method(console, 'info', () => {});
   for (const phone of ['0750000000', '750000000', '+256 750 000 000']) {
-    const result = await lipapay.requestToPay({amountUGX:500, phone, orderId:'OFFLINE-001', network:'airtel'});
+    const result = await lipapay.requestToPay({amountUGX:500, phone, orderId:'OFFLINE-001', note:'A long shop order description that previously blocked prompts', network:'airtel'});
     const {Sign, ...fields} = calls.at(-1).body;
     assert.equal(calls.at(-1).url, 'https://pay.lipapayug.com/api/pay/unifiedorder');
     assert.deepEqual(fields, {
       Version:'v1.0', MchID:2, TimeStamp:fields.TimeStamp, Channel:2,
       OutTradeNo:'OFFLINE-001', Amount:50000, TransactionType:1,
       TraderID:'0750000000', TraderFullName:'MARK ISAGALA',
-      Description:'MrSqoopExpress OFFLINE-001', NotifyUrl:'https://example.test/callback',
+      Description:'Test', NotifyUrl:'https://example.test/callback',
     });
     const base = Object.entries(fields).map(([k,v]) => `${k}=${v}`).join('&');
     assert.equal(Sign, crypto.createHash('md5').update(base+'&privateKey=offline-test-key').digest('hex'));
@@ -161,11 +161,11 @@ test('a channel-side server error cannot be treated as definitely unsent', async
 });
 
 test('MTN collections preserve channel one and the same verified receipt contract', async (t) => {
-  let channel;
-  t.mock.method(globalThis,'fetch',async(_,init)=>{channel=JSON.parse(init.body).Channel;return new Response(signedAcceptance());});
+  let fields;
+  t.mock.method(globalThis,'fetch',async(_,init)=>{fields=JSON.parse(init.body);return new Response(signedAcceptance());});
   t.mock.method(console,'info',()=>{});
   const result=await lipapay.requestToPay({amountUGX:500,phone:'0770000000',orderId:'OFFLINE-001',network:'mtn'});
-  assert.equal(channel,1);assert.equal(result.status,'PENDING');
+  assert.equal(fields.Channel,1);assert.equal(fields.Description,'MrSqoopExpress OFFLINE-001');assert.equal(result.status,'PENDING');
 });
 
 for (const quote of [{Succeeded:false,StatusCode:400,Errors:'Unknown wallet'}, {Succeeded:true,StatusCode:200,Data:{}}]) {
@@ -184,4 +184,16 @@ test('Airtel uses the provider wallet name in registered order and signs it befo
   assert.equal(calls.length,2);assert.equal(calls[0].body.Channel,2);
   assert.equal(calls[1].body.TraderFullName,'MARK ISAGALA');assert.equal(calls[1].body.Amount,70000);
   assert.equal(calls.filter(x=>x.url.endsWith('/unifiedorder')).length,1);
+});
+
+test('Airtel uses LipaPay while MTN keeps its configured provider', async (t) => {
+  const { resolveProvider } = await import('../lib/payments/resolve.js');
+  const mtn = await import('../lib/payments/mtn.js');
+  const previous = process.env.PAYMENT_PROVIDER;
+  t.after(() => { if (previous === undefined) delete process.env.PAYMENT_PROVIDER; else process.env.PAYMENT_PROVIDER = previous; });
+  process.env.PAYMENT_PROVIDER = 'direct';
+  assert.equal(resolveProvider('airtel').provider.requestToPay, lipapay.requestToPay);
+  assert.equal(resolveProvider('mtn').provider.requestToPay, mtn.requestToPay);
+  process.env.PAYMENT_PROVIDER = 'lipapay';
+  assert.equal(resolveProvider('mtn').provider.requestToPay, lipapay.requestToPay);
 });

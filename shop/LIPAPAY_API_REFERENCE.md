@@ -559,3 +559,12 @@ That places the order, then polls `orderquery` until `PayStatus` resolves. Witho
    integrations — it covers the same two wallets, so the win is consolidation plus
    name-lookup and reconciliation, not new payment methods.
 6. 🟡 **Fund the account** if disbursements (refunds) are ever wanted — balance is 0.00.
+
+## Airtel prompt description — verified 17 November 2026
+
+Use exactly `Description: "Test"` for Airtel collections. LipaPay support requested
+this change after longer descriptions returned acceptance but no PIN prompt.
+A 700 UGX collection (711 UGX with fees), sent directly from the whitelisted VPS
+with this description and the wallet name returned by bill enquiry, delivered
+the PIN prompt; the customer confirmed receipt. MTN keeps its existing description.
+Prompt delivery is separate from final payment success.

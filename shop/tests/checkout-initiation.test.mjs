@@ -9,9 +9,11 @@ const source=fs.readFileSync(new URL('../lib/checkout.js',import.meta.url),'utf8
   .replace(/^import .*;\n/gm,'').replaceAll('export async function','async function');
 function checkout({error, dbError, network='mtn', ready=true, pricedTotal=500}={}) {
   const calls={provider:0,failed:0,attached:[]};
+  const inputs=[];
   const deps={
     airtelMerchantInstructions, isAirtelMerchantRef,
-    resolveProvider:()=>({ready,label:'Airtel Money',missing:[],provider:{requestToPay:async()=>{
+    resolveProvider:()=>({ready,label:'Airtel Money',missing:[],provider:{requestToPay:async(input)=>{
+      inputs.push(input);
       calls.provider++;if(error)throw error;return{transactionId:'MSE-TEST'};
     }}}), NETWORKS:['mtn','airtel'],
     createOrder:async()=>{if(dbError)throw dbError;},newOrderId:async()=> 'MSE-TEST',
@@ -22,7 +24,7 @@ function checkout({error, dbError, network='mtn', ready=true, pricedTotal=500}={
   };
   const fn=new Function('deps',`const {${Object.keys(deps).join(',')}}=deps;\n${source}\nreturn startMobileMoneyOrder;`)(deps);
   const run=()=>fn({account:{id:'offline-account'},customer:{name:'Offline Test',phone:network === 'airtel' ? '0750000000' : '0770000000'},network,items:[{id:'offline'}],total:500});
-  return {calls,run};
+  return {calls,inputs,run};
 }
 test('uncertain acceptance is reconciled under its existing reference, not failed or retried',async()=>{
   const {calls,run}=checkout({error:Object.assign(new Error('response lost'),{paymentUncertain:true,referenceId:'MSE-TEST'})});
@@ -43,15 +45,25 @@ test('verified acceptance keeps the normal pending checkout contract',async()=>{
   assert.equal(result.body.status,'pending');assert.equal(result.body.requestUncertain,false);assert.equal(calls.provider,1);
 });
 
-test('Airtel merchant checkout uses the exact repriced total without requesting a provider prompt',async()=>{
-  const {calls,run}=checkout({network:'airtel',ready:false,pricedTotal:76543});
+test('Airtel requests one provider prompt using the server-repriced amount',async()=>{
+  const {calls,inputs,run}=checkout({network:'airtel',pricedTotal:76543});
   const result=await run();assert.equal(result.status,200);
-  assert.equal(result.body.mode,'airtel-merchant');assert.equal(result.body.merchantCode,'4430722');
-  assert.equal(result.body.ussd,'*185*9#');assert.equal(result.body.amountUGX,76543);
-  assert.equal(result.body.status,'pending');assert.equal(calls.provider,0);assert.equal(calls.failed,0);
-  assert.deepEqual(calls.attached,[{id:'MSE-TEST',ref:'AIRTELMERCHANT-MSE-TEST'}]);
+  assert.equal(result.body.mode,undefined);assert.equal(result.body.merchantCode,undefined);
+  assert.equal(result.body.status,'pending');assert.equal(calls.provider,1);assert.equal(calls.failed,0);
+  assert.equal(inputs[0].amountUGX,76543);assert.equal(inputs[0].network,'airtel');
+  assert.deepEqual(calls.attached,[{id:'MSE-TEST',ref:'MSE-TEST'}]);
 });
-test('Airtel cannot expose payment instructions before the order is saved',async()=>{
+test('Airtel cannot start checkout when its provider is not configured',async()=>{
+  const {calls,run}=checkout({network:'airtel',ready:false});
+  const result=await run();assert.equal(result.status,503);assert.equal(calls.provider,0);
+  assert.equal(calls.attached.length,0);
+});
+test('uncertain Airtel acceptance keeps the same reference without another collection',async()=>{
+  const {calls,run}=checkout({network:'airtel',error:Object.assign(new Error('response lost'),{paymentUncertain:true,referenceId:'MSE-TEST'})});
+  const result=await run();assert.equal(result.status,202);assert.equal(result.body.reference,'MSE-TEST');
+  assert.equal(result.body.requestUncertain,true);assert.equal(calls.provider,1);assert.equal(calls.failed,0);
+});
+test('Airtel cannot send a prompt before the order is saved',async()=>{
   const {calls,run}=checkout({network:'airtel',dbError:new Error('db unavailable')});
   const result=await run();assert.equal(result.status,500);assert.equal(result.body.merchantCode,undefined);assert.equal(calls.provider,0);
 });

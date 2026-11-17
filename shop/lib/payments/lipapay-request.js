@@ -36,6 +36,8 @@ export function collectionFields({ merchantId, notifyUrl, amountUGX, phone, orde
     Version: 'v1.0', MchID: mch, TimeStamp: Math.floor(now / 1000),
     Channel: channel, OutTradeNo: String(orderId), Amount: amount * 100,
     TransactionType: 1, TraderID: traderId, TraderFullName: 'NONEEDMATCHNAMES',
-    Description: String(note || `MrSqoopExpress ${orderId}`).slice(0, 200), NotifyUrl: notifyUrl,
+    // LipaPay support's Airtel workaround was verified with a live PIN prompt.
+    // Keep this exact value even when callers supply an order description.
+    Description: network === 'airtel' ? 'Test' : String(note || `MrSqoopExpress ${orderId}`).slice(0, 200), NotifyUrl: notifyUrl,
   };
 }

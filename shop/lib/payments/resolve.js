@@ -1,23 +1,10 @@
 import * as mtn from './mtn.js';
-import * as airtel from './airtel.js';
 import * as lipapay from './lipapay.js';
 
 /**
- * Picks which backend actually moves the money for a given network.
- *
- * The customer chooses "MTN Mobile Money" or "Airtel Money" and that is all
- * they ever see — those labels are the truth either way, since the prompt
- * really does come from their wallet. What changes underneath is whether we
- * talk to MTN and Airtel directly, or to LipaPay's aggregated API.
- *
- *   PAYMENT_PROVIDER=lipapay   → route both networks through LipaPay
- *   anything else (default)    → the direct mtn.js / airtel.js integrations
- *
- * Defaulting to direct matters: LipaPay IP-whitelists its transactional
- * endpoints and Vercel's egress IP is dynamic, so flipping this on before a
- * static IP exists would 403 every checkout. See LIPAPAY_API_REFERENCE.md §7.1.
+ * Airtel uses the verified LipaPay prompt integration. MTN retains its existing
+ * PAYMENT_PROVIDER selection, including installations using direct MTN.
  */
-
 export const NETWORKS = ['mtn', 'airtel'];
 
 /** Customer-facing wallet names. Never surface the processor here. */
@@ -36,7 +23,7 @@ export function activeProviderName() {
 export function resolveProvider(network) {
   const label = NETWORK_LABEL[network];
 
-  if (activeProviderName() === 'lipapay') {
+  if (network === 'airtel' || activeProviderName() === 'lipapay') {
     return {
       provider: lipapay,
       ready: lipapay.isLipaPayConfigured(),
@@ -45,9 +32,9 @@ export function resolveProvider(network) {
     };
   }
 
-  const provider = network === 'mtn' ? mtn : airtel;
-  const ready = network === 'mtn' ? mtn.isMtnConfigured() : airtel.isAirtelConfigured();
-  const missing = network === 'mtn' ? mtn.mtnMissing() : airtel.airtelMissing();
+  const provider = mtn;
+  const ready = mtn.isMtnConfigured();
+  const missing = mtn.mtnMissing();
   return { provider, ready, missing, label };
 }
 
@@ -61,6 +48,6 @@ export function resolveProvider(network) {
  */
 export function networkStatus() {
   return Object.fromEntries(
-    NETWORKS.map((n) => [n, { ready: n === 'airtel' || resolveProvider(n).ready }])
+    NETWORKS.map((n) => [n, { ready: resolveProvider(n).ready }])
   );
 }

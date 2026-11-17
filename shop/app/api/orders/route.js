@@ -8,7 +8,7 @@ import { trackingFrom } from '@/lib/meta-capi';
  * POST /api/orders
  * Body: { customer: {name, phone}, network: 'mtn'|'airtel', items: [...], total }
  *
- * Starts an MTN prompt or a pending Airtel merchant-code payment; see
+ * Starts an MTN or Airtel payment prompt; see
  * lib/checkout.js. A 2xx here means the provider accepted the request, not
  * that it was paid — the customer still has to approve the prompt on their
  * handset. The order stays PENDING until the provider says otherwise.

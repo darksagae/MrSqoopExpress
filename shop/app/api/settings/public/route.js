@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loadSettings } from '@/lib/settings';
+import { loadSettings, getPromoImages } from '@/lib/settings';
 import { promoExpired } from '@/lib/promo';
 import { isCardConfigured } from '@/lib/payments/card';
 
@@ -11,13 +11,16 @@ import { isCardConfigured } from '@/lib/payments/card';
  * null (no card payment, so checkout doesn't offer it).
  */
 export async function GET() {
-  const { promo, promoImageVersion, meta, cardPayLink } = await loadSettings();
+  const { promo, promoImageVersion, promoRotationSeconds, meta, cardPayLink } = await loadSettings();
   // An expired promo disappears on its own after its last day.
-  const show = promo.enabled && !promoExpired(promo) && (promo.code || promo.text || promoImageVersion > 0);
+  const banners = await getPromoImages();
+  const show = promo.enabled && !promoExpired(promo) && (promo.code || promo.text || banners.length > 0);
   return NextResponse.json(
     {
       promo: show
         ? {
+            images: banners.map(banner => banner.url),
+            rotationSeconds: promoRotationSeconds,
             code: promo.code,
             text: promo.text,
             minOrder: promo.minOrder || 0,

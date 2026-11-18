@@ -21,6 +21,7 @@ const DEFAULTS = {
   promo: { enabled: false, code: '', text: '', minOrder: 0, discountUGX: 0, endsAt: '' },
   // Bumped whenever the banner image changes; 0 = no image.
   promoImageVersion: 0,
+  promoRotationSeconds: 5,
   // Meta (Facebook/Instagram) ads tracking. The pixel ID is public: it is in
   // every page anyway. The test event code is only set while checking events
   // arrive in Meta Events Manager.
@@ -126,6 +127,11 @@ export function validate(input = {}) {
     if (!ok) errors.push('The card payment link must be the https://…cybersource.com link from Absa.');
     else out.cardPayLink = link;
   }
+  if (input.promoRotationSeconds !== undefined) {
+    const seconds = Number(input.promoRotationSeconds);
+    if (Number.isInteger(seconds) && seconds >= 1 && seconds <= 86400) out.promoRotationSeconds = seconds;
+    else errors.push('Flyer rotation must be a whole number between 1 and 86,400 seconds.');
+  }
   if (input.promoImageVersion !== undefined) {
     const v = Number(input.promoImageVersion);
     if (Number.isInteger(v) && v >= 0) out.promoImageVersion = v;
@@ -222,25 +228,38 @@ export async function savePromoImage(dataUrl) {
 
   const sql = getSql();
   await ensureAssetTable(sql);
-  await sql`
-    INSERT INTO shop_assets (key, content_type, data) VALUES ('promo-banner', ${type}, ${buf})
-    ON CONFLICT (key) DO UPDATE SET content_type = EXCLUDED.content_type, data = EXCLUDED.data, updated_at = now()
-  `;
-  const version = Date.now();
-  const saved = await saveSettings({ promoImageVersion: version });
-  return saved.ok ? { ok: true, version } : { ok: false, error: saved.errors.join(' ') };
+  const id = `promo-flyer-${crypto.randomUUID()}`;
+  await sql`INSERT INTO shop_assets (key, content_type, data) VALUES (${id}, ${type}, ${buf})`;
+  return { ok: true, banners: await getPromoImages() };
 }
 
-export async function removePromoImage() {
-  const sql = getSql();
-  await ensureAssetTable(sql);
-  await sql`DELETE FROM shop_assets WHERE key = 'promo-banner'`;
-  return saveSettings({ promoImageVersion: 0 });
+export function validPromoImageId(id) {
+  return id === 'promo-banner' || /^promo-flyer-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id);
 }
 
-export async function getPromoImage() {
+export async function removePromoImage(id = 'promo-banner') {
+  if (!validPromoImageId(id)) return { ok: false, error: 'Invalid flyer.' };
   const sql = getSql();
   await ensureAssetTable(sql);
-  const rows = await sql`SELECT content_type, data FROM shop_assets WHERE key = 'promo-banner'`;
+  await sql`DELETE FROM shop_assets WHERE key = ${id}`;
+  if (id === 'promo-banner') await saveSettings({ promoImageVersion: 0 });
+  return { ok: true, banners: await getPromoImages() };
+}
+
+export async function getPromoImages() {
+  if (!isDbConfigured()) return [];
+  const sql = getSql();
+  await ensureAssetTable(sql);
+  const rows = await sql`SELECT key, updated_at FROM shop_assets
+    WHERE key = 'promo-banner' OR key LIKE 'promo-flyer-%' ORDER BY updated_at, key`;
+  return rows.map(row => ({ id: row.key,
+    url: `/api/promo-banner?id=${encodeURIComponent(row.key)}&v=${new Date(row.updated_at).getTime()}` }));
+}
+
+export async function getPromoImage(id = 'promo-banner') {
+  if (!validPromoImageId(id)) return null;
+  const sql = getSql();
+  await ensureAssetTable(sql);
+  const rows = await sql`SELECT content_type, data FROM shop_assets WHERE key = ${id}`;
   return rows[0] || null;
 }

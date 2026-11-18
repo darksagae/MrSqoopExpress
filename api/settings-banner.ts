@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const upstream = await fetch(`${SHOP_URL}/api/admin/promo-banner`, {
       method: req.method,
       headers: { 'Content-Type': 'application/json', 'x-ingest-secret': secret },
-      body: req.method === 'PUT' ? JSON.stringify(req.body ?? {}) : undefined,
+      body: JSON.stringify(req.body ?? {}),
       signal: AbortSignal.timeout(15_000),
     })
     const data = await upstream.json().catch(() => ({}))

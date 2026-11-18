@@ -15,7 +15,7 @@ export async function PUT(request) {
   try {
     const r = await savePromoImage(body?.dataUrl);
     if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
-    return NextResponse.json({ ok: true, promoImageVersion: r.version });
+    return NextResponse.json({ ok: true, banners: r.banners });
   } catch (e) {
     console.error('[promo-banner] save failed:', e.message);
     return NextResponse.json({ error: 'Could not save the banner.' }, { status: 500 });
@@ -25,8 +25,9 @@ export async function PUT(request) {
 export async function DELETE(request) {
   if (!isSettingsAdmin(request)) return denied();
   try {
-    await removePromoImage();
-    return NextResponse.json({ ok: true, promoImageVersion: 0 });
+    const body = await request.json().catch(() => ({}));
+    const result = await removePromoImage(body.id);
+    return NextResponse.json(result, { status: result.ok ? 200 : 400 });
   } catch (e) {
     console.error('[promo-banner] remove failed:', e.message);
     return NextResponse.json({ error: 'Could not remove the banner.' }, { status: 500 });

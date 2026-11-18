@@ -69,21 +69,26 @@ export function ShopSettings() {
     }
   }
 
-  const pickBanner = async (file: File | undefined) => {
-    if (!file || !form) return
+  const pickBanners = async (files: File[]) => {
+    if (!files.length || !form) return
     setUploading(true)
     setMessage(null)
+    let uploaded = 0
+    let latest = form
     try {
-      const version = await uploadPromoBanner(await toBannerDataUrl(file))
-      // A freshly uploaded banner goes live straight away: switch the banner on
-      // and save, so there is no second step to forget.
-      const { promoImageVersion, ...rest } = { ...form, promoImageVersion: version }
-      void promoImageVersion
-      const saved = await saveShopSettings({ ...rest, promo: { ...form.promo, enabled: true } } as Settings)
+      // One resized image per request keeps batches within upload limits.
+      for (const file of files) {
+        const banners = await uploadPromoBanner(await toBannerDataUrl(file))
+        latest = { ...latest, promoBanners: banners }
+        setForm(latest)
+        uploaded++
+        setMessage({ ok: true, text: `Uploaded ${uploaded} of ${files.length} flyers…` })
+      }
+      const saved = await saveShopSettings({ ...latest, promo: { ...latest.promo, enabled: true } })
       setForm(saved)
-      setMessage({ ok: true, text: 'Banner uploaded and switched on. It shows on the shop within about a minute.' })
+      setMessage({ ok: true, text: `${uploaded} flyers added. They rotate on the shop after its settings refresh.` })
     } catch (e) {
-      setMessage({ ok: false, text: e instanceof Error ? e.message : 'Could not upload the banner.' })
+      setMessage({ ok: false, text: `${uploaded} flyers added. ${e instanceof Error ? e.message : 'Upload failed.'} You can select the remaining files and try again.` })
     } finally {
       setUploading(false)
     }
@@ -106,12 +111,12 @@ export function ShopSettings() {
     }
   }
 
-  const dropBanner = async () => {
+  const dropBanner = async (id: string) => {
     if (!form) return
     setUploading(true)
     try {
-      await removePromoBanner()
-      setForm({ ...form, promoImageVersion: 0 })
+      const banners = await removePromoBanner(id)
+      setForm({ ...form, promoBanners: banners, ...(id === 'promo-banner' ? { promoImageVersion: 0 } : {}) })
     } catch (e) {
       setMessage({ ok: false, text: e instanceof Error ? e.message : 'Could not remove the banner.' })
     } finally {
@@ -176,43 +181,32 @@ export function ShopSettings() {
                 className={input}
               />
             </div>
-            <div className="grid gap-2 text-sm text-neutral-400">
-              Banner image (optional) — shown on the home page and product pages
-              {form.promoImageVersion > 0 && (
-                <img
-                  src={`${SHOP_URL}/api/promo-banner?v=${form.promoImageVersion}`}
-                  alt="Current banner"
-                  className="max-h-40 w-full rounded-xl border border-neutral-800 object-contain"
-                />
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <label
-                  className="cursor-pointer rounded-full px-4 py-2 font-bold text-black"
-                  style={{ backgroundColor: GOLD, opacity: uploading ? 0.6 : 1 }}
-                >
-                  {uploading ? 'Uploading…' : form.promoImageVersion > 0 ? 'Replace banner' : 'Upload banner'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={uploading}
-                    className="hidden"
-                    onChange={(e) => {
-                      void pickBanner(e.target.files?.[0])
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-                {form.promoImageVersion > 0 && (
-                  <button
-                    type="button"
-                    disabled={uploading}
-                    onClick={() => void dropBanner()}
-                    className="rounded-full border border-red-500/60 px-4 py-2 text-red-400 disabled:opacity-60"
-                  >
-                    Remove banner
-                  </button>
-                )}
+            <div className="grid gap-3 text-sm text-neutral-400" aria-busy={uploading}>
+              <p>Flyers — shown in upload order on the home page and product pages. Add as many as you need.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(form.promoBanners ?? (form.promoImageVersion > 0 ? [{ id: 'promo-banner', url: `/api/promo-banner?v=${form.promoImageVersion}` }] : [])).map((banner, index) => (
+                  <div key={banner.id} className="grid gap-2 rounded-xl border border-neutral-800 p-3">
+                    <img src={`${SHOP_URL}${banner.url}`} alt={`Flyer ${index + 1}`} className="max-h-40 w-full object-contain" />
+                    <button type="button" disabled={uploading || saving} onClick={() => void dropBanner(banner.id)}
+                      className="rounded-full border border-red-500/60 px-4 py-2 text-red-400 disabled:opacity-60">
+                      Remove flyer {index + 1}
+                    </button>
+                  </div>
+                ))}
               </div>
+              <label className="grid gap-2 text-white">
+                Add flyers (select one or more images)
+                <input type="file" multiple accept="image/jpeg,image/png,image/webp" disabled={uploading || saving}
+                  className="block w-full rounded-xl border border-neutral-700 p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#E8B923]"
+                  onChange={(e) => { void pickBanners(Array.from(e.target.files ?? [])); e.target.value = '' }} />
+              </label>
+              <label className="grid gap-1">
+                Change flyer every (seconds)
+                <input type="number" min={1} max={86400} step={1} required value={form.promoRotationSeconds ?? 5}
+                  disabled={uploading || saving}
+                  onChange={(e) => setForm({ ...form, promoRotationSeconds: Number(e.target.value) })} className={input} />
+              </label>
+              <p>Click Save settings to apply the timing. With one flyer, the image stays still. Offer text and discount code apply to all flyers.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <label className="grid gap-1 text-sm text-neutral-400">
@@ -321,11 +315,11 @@ export function ShopSettings() {
           </div>
 
           {message && (
-            <p className={`text-sm md:col-span-2 ${message.ok ? 'text-green-400' : 'text-red-400'}`}>{message.text}</p>
+            <p role="status" className={`text-sm md:col-span-2 ${message.ok ? 'text-green-400' : 'text-red-400'}`}>{message.text}</p>
           )}
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploading}
             className="rounded-full py-3 font-bold text-black disabled:opacity-60 md:col-span-2"
             style={{ backgroundColor: GOLD }}
           >

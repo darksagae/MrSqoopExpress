@@ -193,7 +193,11 @@ export async function migrateDatabase() {
 
 export { ApiError }
 
+export interface PromoFlyer { id: string; url: string }
+
 export interface ShopSettings {
+  promoBanners?: PromoFlyer[]
+  promoRotationSeconds?: number
   rate: number
   handlingPercent: number
   promo: { enabled: boolean; code: string; text: string; minOrder: number; discountUGX: number; endsAt: string }
@@ -252,18 +256,18 @@ export async function saveShopSettings(settings: ShopSettings): Promise<ShopSett
   return (await parseJson<{ settings: ShopSettings }>(response)).settings
 }
 
-export async function uploadPromoBanner(dataUrl: string): Promise<number> {
+export async function uploadPromoBanner(dataUrl: string): Promise<PromoFlyer[]> {
   const response = await fetch('/api/settings-banner', {
     method: 'PUT',
     headers: authHeaders(),
     body: JSON.stringify({ dataUrl }),
   })
-  return (await parseJson<{ promoImageVersion: number }>(response)).promoImageVersion
+  return (await parseJson<{ banners: PromoFlyer[] }>(response)).banners
 }
 
-export async function removePromoBanner(): Promise<void> {
-  const response = await fetch('/api/settings-banner', { method: 'DELETE', headers: authHeaders(false) })
-  await parseJson<{ ok: boolean }>(response)
+export async function removePromoBanner(id: string): Promise<PromoFlyer[]> {
+  const response = await fetch('/api/settings-banner', { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ id }) })
+  return (await parseJson<{ banners: PromoFlyer[] }>(response)).banners
 }
 
 export async function placeSupplierOrder(id: string): Promise<Order> {

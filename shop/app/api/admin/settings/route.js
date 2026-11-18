@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { loadSettings, saveSettings, isSettingsAdmin } from '@/lib/settings';
+import { loadSettings, saveSettings, isSettingsAdmin, getPromoImages } from '@/lib/settings';
 
 /**
  * GET / PUT /api/admin/settings
@@ -11,7 +11,9 @@ import { loadSettings, saveSettings, isSettingsAdmin } from '@/lib/settings';
 const denied = () => NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
 // The Conversions API token never leaves the server: the admin only learns
 // whether one is saved.
-const view = (s) => ({
+const view = async (s) => ({
+  promoBanners: await getPromoImages(),
+  promoRotationSeconds: s.promoRotationSeconds,
   rate: s.rate,
   handlingPercent: s.handlingPercent,
   promo: s.promo,
@@ -23,7 +25,7 @@ const view = (s) => ({
 
 export async function GET(request) {
   if (!isSettingsAdmin(request)) return denied();
-  return NextResponse.json({ settings: view(await loadSettings({ force: true })) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({ settings: await view(await loadSettings({ force: true })) }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export async function PUT(request) {
@@ -37,7 +39,7 @@ export async function PUT(request) {
   try {
     const result = await saveSettings(body);
     if (!result.ok) return NextResponse.json({ error: result.errors.join(' ') }, { status: 400 });
-    return NextResponse.json({ settings: view(result.settings) });
+    return NextResponse.json({ settings: await view(result.settings) });
   } catch (e) {
     console.error('[settings] save failed:', e.message);
     return NextResponse.json({ error: 'Could not save settings.' }, { status: 500 });

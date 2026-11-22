@@ -3,7 +3,8 @@ import { getSql, isDbConfigured } from './db.js';
 export async function sitemapProducts() {
   if (!isDbConfigured()) return [];
   const sql = getSql();
-  return sql`SELECT product->>'id' AS id, max(updated_at) AS updated_at
+  return sql`SELECT product->>'id' AS id, max(updated_at) AS updated_at,
+    (array_agg(product->>'image' ORDER BY updated_at DESC))[1] AS image
     FROM catalog_browse_cache CROSS JOIN LATERAL jsonb_array_elements(products) AS product
     WHERE updated_at > now() - interval '7 days' AND product->>'id' ~ '^[0-9]+$'
     GROUP BY product->>'id' ORDER BY max(updated_at) DESC LIMIT 49000`;

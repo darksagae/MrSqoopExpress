@@ -7,9 +7,10 @@ const source = fs.readFileSync(new URL('../app/sitemap.js',import.meta.url),'utf
   .replace('export default async function sitemap','async function sitemap');
 test('sitemap includes all sixteen canonical categories and cached product URLs', async () => {
   const sitemap = new Function('CATEGORIES','categorySlug','sitemapProducts',`${source}\nreturn sitemap;`)(CATEGORIES, categorySlug,
-    async () => [{ id: '100123', updated_at: '2026-10-22T00:00:00Z' }]);
+    async () => [{ id: '100123', updated_at: '2026-10-22T00:00:00Z', image: 'https://example.com/product.jpg' }]);
   const entries = await sitemap();
   assert.equal(entries.length, 21);
+  assert.deepEqual(entries.find(e=>e.url.endsWith('/product/100123')).images, ['https://example.com/product.jpg']);
   assert.equal(entries.filter(e=>e.url.includes('/category/')).length,16);
   assert.ok(entries.some(e=>e.url.endsWith('/category/phones-tablets')));
   assert.ok(entries.some(e=>e.url.endsWith('/product/100123')));

@@ -12,6 +12,6 @@ export default async function sitemap() {
     { url: `${SITE}/returns`, changeFrequency: 'yearly', priority: 0.3 },
     { url: `${SITE}/privacy`, changeFrequency: 'yearly', priority: 0.3 },
     ...CATEGORIES.map((category) => ({ url: `${SITE}/category/${categorySlug(category)}`, changeFrequency: 'daily', priority: 0.8 })),
-    ...products.map((product) => ({ url: `${SITE}/product/${product.id}`, lastModified: new Date(product.updated_at), changeFrequency: 'daily', priority: 0.6 })),
+    ...products.map((product) => ({ url: `${SITE}/product/${product.id}`, lastModified: new Date(product.updated_at), ...(/^https:\/\//.test(product.image || '') ? { images: [product.image] } : {}), changeFrequency: 'daily', priority: 0.6 })),
   ];
 }

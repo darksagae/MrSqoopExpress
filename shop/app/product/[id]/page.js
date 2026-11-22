@@ -15,7 +15,7 @@ export default async function ProductPage({ params }) {
       </div></div>
       <div className="pd-info"><h1 className="pd-title">{product.title}</h1>
         <p>Shop this product with Mr Sqoop Express for delivery to Uganda.</p>
-        <p role="status">Checking current prices, available options and shipping…</p>
+        <p>Available options, current prices and shipping are confirmed before ordering.</p>
       </div>
     </div>
   </article> : <div className="pd-status" role="status">Loading product…</div>;

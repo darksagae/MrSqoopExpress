@@ -92,7 +92,14 @@ export default function ProductDetail({ loadingContent }) {
     return () => { cancelled = true; };
   }, [id, variant?.skuId, product?.shipping?.quotedForSkuId, product]);
 
-  if (loading) return loadingContent || <div className="pd-status">Loading product…</div>;
+  if (loading) return <>{loadingContent}<div className="pd-status" role="status">Checking current prices, available options and shipping…</div></>;
+
+  if (error && error.code !== 'NOT_DELIVERABLE' && loadingContent) {
+    return <>{loadingContent}<div className="pd-status" role="status">
+      <p>Current prices and options are temporarily unavailable. Please try again in a moment.</p>
+      <button type="button" className="pd-back" onClick={() => window.location.reload()}>Try again</button>
+    </div></>;
+  }
 
   if (error) {
     return (

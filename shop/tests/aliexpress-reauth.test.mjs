@@ -25,3 +25,21 @@ test('a successful reconnection clears the guard and allows the new token', asyn
   const valid = fixture(row, false);
   assert.equal(await valid.client.getAccessToken(), 'new');
 });
+
+test('authorization migrates the retired callback without changing app identity', () => {
+  const previous = process.env.ALIEXPRESS_CALLBACK_URL;
+  try {
+    process.env.ALIEXPRESS_CALLBACK_URL = 'https://ali.mrsqoopexpress.com/api/auth/aliexpress/callback';
+    const {client} = fixture({});
+    client.appKey = 'test-app';
+    const url = new URL(client.getAuthorizeUrl('test-state'));
+    assert.equal(url.searchParams.get('redirect_uri'), 'https://www.mrsqoopexpress.com/api/auth/aliexpress/callback');
+    assert.equal(url.searchParams.get('client_id'), 'test-app');
+    assert.equal(url.searchParams.get('state'), 'test-state');
+    process.env.ALIEXPRESS_CALLBACK_URL = 'https://www.mrsqoopexpress.com/api/auth/aliexpress/callback';
+    assert.equal(new URL(client.getAuthorizeUrl()).searchParams.get('redirect_uri'), process.env.ALIEXPRESS_CALLBACK_URL);
+  } finally {
+    if (previous === undefined) delete process.env.ALIEXPRESS_CALLBACK_URL;
+    else process.env.ALIEXPRESS_CALLBACK_URL = previous;
+  }
+});

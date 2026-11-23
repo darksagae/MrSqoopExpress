@@ -462,7 +462,14 @@ export class AliExpressDS {
 
   /** Build the URL to send the user to for authorization. */
   getAuthorizeUrl(state = 'mrsqoop') {
-    const callback = process.env.ALIEXPRESS_CALLBACK_URL;
+    let callback = process.env.ALIEXPRESS_CALLBACK_URL;
+    // The old OAuth subdomain was retired; its saved environment value must
+    // not send account owners back to an expired, removed deployment.
+    try {
+      if (new URL(callback).hostname === 'ali.mrsqoopexpress.com') {
+        callback = 'https://www.mrsqoopexpress.com/api/auth/aliexpress/callback';
+      }
+    } catch { /* The authorization route reports missing configuration. */ }
     const params = new URLSearchParams({
       response_type: 'code',
       force_auth: 'true',

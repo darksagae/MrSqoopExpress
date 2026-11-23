@@ -100,6 +100,11 @@ export class AliExpressDS {
       throw err;
     }
 
+    if (row.needs_reauth) {
+      const err = new Error('AliExpress authorization must be reconnected at /api/auth/aliexpress.');
+      err.code = 'REAUTH_REQUIRED';
+      throw err;
+    }
     if (force || needsRefresh(row)) row = await this.refreshTokens(row);
 
     if (!row?.access_token) {
@@ -130,6 +135,11 @@ export class AliExpressDS {
    * everyone else waits and re-reads the result.
    */
   async refreshTokens(current) {
+    if (current?.needs_reauth) {
+      const err = new Error('AliExpress authorization must be reconnected at /api/auth/aliexpress.');
+      err.code = 'REAUTH_REQUIRED';
+      throw err;
+    }
     const claimed = await claimRefresh();
     if (!claimed) {
       await sleep(2000);

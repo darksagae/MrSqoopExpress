@@ -223,6 +223,8 @@ export async function attachSkus(products) {
 
 /** @returns {Promise<{ source: string, products: object[] }>} */
 export async function getTrending({ page = 1, pageSize = 20 } = {}) {
+  // An expired grant cannot be repaired by trying sixteen category searches.
+  await aliexpressDS.getAccessToken();
   const found = (await fromFeed({ page, pageSize })) || (await fromCategories({ page, pageSize }));
   return { ...found, products: await attachSkus(found.products) };
 }
